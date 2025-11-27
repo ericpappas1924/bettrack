@@ -53,27 +53,132 @@ function calculateAmericanOdds(stake: number, potentialWin: number): number {
 
 function detectSport(text: string): 'NFL' | 'NBA' | 'CFB' | 'NCAAF' {
   const upper = text.toUpperCase();
-  if (upper.includes('[NFL]') || upper.includes('CHIEFS') || upper.includes('COWBOYS') || 
-      upper.includes('LIONS') || upper.includes('PACKERS') || upper.includes('BENGALS') ||
-      upper.includes('RAVENS') || upper.includes('EAGLES') || upper.includes('BEARS') ||
-      upper.includes('TEXANS') || upper.includes('COLTS') || upper.includes('49ERS') ||
-      upper.includes('BROWNS') || upper.includes('DOLPHINS') || upper.includes('SAINTS') ||
-      upper.includes('PATRIOTS') || upper.includes('GIANTS')) {
-    return 'NFL';
+  if (upper.includes('[NBA]')) return 'NBA';
+  if (upper.includes('[CFB]')) return 'CFB';
+  if (upper.includes('[NFL]')) return 'NFL';
+  if (upper.includes('[NCAAF]')) return 'NCAAF';
+  
+  const nflTeams = ['CHIEFS', 'COWBOYS', 'LIONS', 'PACKERS', 'BENGALS', 'RAVENS', 
+    'EAGLES', 'BEARS', 'TEXANS', 'COLTS', '49ERS', 'BROWNS', 'DOLPHINS', 'SAINTS',
+    'PATRIOTS', 'GIANTS', 'SEAHAWKS', 'RAMS', 'CARDINALS', 'FALCONS', 'PANTHERS',
+    'BUCCANEERS', 'VIKINGS', 'CHARGERS', 'RAIDERS', 'BRONCOS', 'JETS', 'BILLS',
+    'STEELERS', 'TITANS', 'JAGUARS', 'COMMANDERS'];
+  
+  const nbaTeams = ['BUCKS', 'HEAT', 'PACERS', 'RAPTORS', 'ROCKETS', 'WARRIORS',
+    'KNICKS', 'HORNETS', 'SPURS', 'BLAZERS', 'TIMBERWOLVES', 'THUNDER', 'SUNS',
+    'KINGS', 'GRIZZLIES', 'PELICANS', 'LAKERS', 'CLIPPERS', 'CELTICS', 'NETS',
+    'SIXERS', '76ERS', 'BULLS', 'CAVALIERS', 'PISTONS', 'HAWKS', 'MAGIC', 'WIZARDS',
+    'MAVERICKS', 'NUGGETS', 'JAZZ'];
+  
+  for (const team of nflTeams) {
+    if (upper.includes(team)) return 'NFL';
   }
-  if (upper.includes('[NBA]') || upper.includes('BUCKS') || upper.includes('HEAT') ||
-      upper.includes('PACERS') || upper.includes('RAPTORS') || upper.includes('ROCKETS') ||
-      upper.includes('WARRIORS') || upper.includes('KNICKS') || upper.includes('HORNETS') ||
-      upper.includes('SPURS') || upper.includes('BLAZERS') || upper.includes('TIMBERWOLVES') ||
-      upper.includes('THUNDER') || upper.includes('SUNS') || upper.includes('KINGS') ||
-      upper.includes('GRIZZLIES') || upper.includes('PELICANS')) {
-    return 'NBA';
+  for (const team of nbaTeams) {
+    if (upper.includes(team)) return 'NBA';
   }
-  if (upper.includes('[CFB]') || upper.includes('OHIO STATE') || upper.includes('NAVY') || 
-      upper.includes('MEMPHIS')) {
-    return 'CFB';
+  
+  const cfbTeams = ['OHIO STATE', 'ALABAMA', 'GEORGIA', 'MICHIGAN', 'CLEMSON',
+    'NOTRE DAME', 'TEXAS', 'USC', 'OKLAHOMA', 'OREGON', 'PENN STATE', 'LSU',
+    'NAVY', 'ARMY', 'MEMPHIS', 'FLORIDA', 'AUBURN', 'TENNESSEE', 'WISCONSIN'];
+  
+  for (const team of cfbTeams) {
+    if (upper.includes(team)) return 'CFB';
   }
+  
   return 'NFL';
+}
+
+function extractStraightBetDetails(block: string): { game: string; description: string; sport: 'NFL' | 'NBA' | 'CFB' | 'NCAAF' } {
+  const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+)/);
+  if (straightMatch) {
+    const gameDate = straightMatch[1];
+    const sportTag = straightMatch[2];
+    const lineNum = straightMatch[3];
+    let betDetails = straightMatch[4].trim();
+    
+    betDetails = betDetails.replace(/\s*\(Score:[^)]+\)/, '').trim();
+    
+    let sport: 'NFL' | 'NBA' | 'CFB' | 'NCAAF' = 'NFL';
+    if (sportTag === 'NFL') sport = 'NFL';
+    else if (sportTag === 'NBA') sport = 'NBA';
+    else if (sportTag === 'CFB') sport = 'CFB';
+    else if (sportTag === 'NCAAF') sport = 'NCAAF';
+    
+    const teamMatch = betDetails.match(/^([A-Z\s]+)/);
+    const game = teamMatch ? teamMatch[1].trim() : betDetails;
+    
+    return { game, description: betDetails, sport };
+  }
+  
+  return { game: 'Unknown', description: 'Unknown bet', sport: detectSport(block) };
+}
+
+function extractPlayerPropDetails(block: string): { game: string; description: string } {
+  const gamePatterns = [
+    /([A-Za-z\s]+(?:Chiefs|Cowboys|Bengals|Ravens|Bucks|Heat|Pacers|Raptors|Rockets|Warriors|Knicks|Hornets|Spurs|Blazers|Timberwolves|Thunder|Suns|Kings|Grizzlies|Pelicans|Giants|Patriots|Saints|Dolphins|Texans|Colts|49ers|Browns|Eagles|Bears|Lions|Packers|Navy|Memphis|Lakers|Celtics|Nets|Clippers|Mavericks|Nuggets)[A-Za-z\s]*)\s+vs\s+([A-Za-z\s]+)/i,
+    /([A-Za-z\s]+)\s+vs\s+([A-Za-z\s]+)/i
+  ];
+  
+  let game = '';
+  for (const pattern of gamePatterns) {
+    const match = block.match(pattern);
+    if (match) {
+      game = match[0].trim();
+      break;
+    }
+  }
+  
+  const propPatterns = [
+    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+    /([A-Za-z\s'\.]+)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*([\d\.]+\+)\s+([A-Za-z\s]+?)(?=\n|Pending|$)/i,
+  ];
+  
+  let description = '';
+  for (const pattern of propPatterns) {
+    const match = block.match(pattern);
+    if (match) {
+      if (match[4]) {
+        description = `${match[1].trim()} ${match[2]} ${match[3]} ${match[4].trim()}`;
+      } else if (match[3]) {
+        description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
+      }
+      break;
+    }
+  }
+  
+  if (!description && game) {
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+    for (const line of lines) {
+      if (line.match(/Over|Under/i) && !line.includes('vs')) {
+        description = line.replace(/\([A-Z]+\)/, '').trim();
+        break;
+      }
+    }
+  }
+  
+  return { game, description: description || game };
+}
+
+function extractParlayDetails(block: string): { legs: string[]; description: string } {
+  const legPattern = /\[[^\]]+\]\s*\[([^\]]+)\]\s*-\s*\[\d+\]\s*([^\[\n]+)/g;
+  const legs: string[] = [];
+  let match;
+  
+  while ((match = legPattern.exec(block)) !== null) {
+    const sport = match[1];
+    let betDetail = match[2].trim();
+    betDetail = betDetail.replace(/\s*\[Pending\]/, '').trim();
+    legs.push(betDetail);
+  }
+  
+  const parlayTeamMatch = block.match(/PARLAY\s*\((\d+)\s*TEAMS?\)/i);
+  const teamCount = parlayTeamMatch ? parlayTeamMatch[1] : legs.length.toString();
+  
+  return {
+    legs,
+    description: `${teamCount}-Team Parlay`
+  };
 }
 
 export function parseBetPaste(rawText: string): ParsedBet[] {
@@ -83,10 +188,11 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
   
   for (const block of betBlocks) {
     if (!block.trim()) continue;
+    if (block.trim() === 'TOTAL') continue;
     
     try {
       const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-      if (lines.length < 3) continue;
+      if (lines.length < 2) continue;
       
       const dateMatch = lines[0].match(/((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}-\d{4})/);
       if (!dateMatch) continue;
@@ -94,28 +200,34 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
       let timeStr = '';
       let idAndType = '';
       
-      if (lines[1].match(/^\d{2}:\d{2}\s+(?:AM|PM)/)) {
-        const timeLine = lines[1];
-        const parts = timeLine.split(/\t+/);
-        timeStr = parts[0];
-        if (parts.length >= 2) {
-          idAndType = parts.slice(1).join('\t');
+      const timePattern = /^(\d{2}:\d{2}\s+(?:AM|PM))/;
+      for (let i = 1; i < Math.min(3, lines.length); i++) {
+        const timeMatch = lines[i].match(timePattern);
+        if (timeMatch) {
+          timeStr = timeMatch[1];
+          const parts = lines[i].split(/\t+/);
+          if (parts.length >= 2) {
+            idAndType = parts.slice(1).join('\t');
+          } else {
+            idAndType = lines[i].substring(timeMatch[0].length).trim();
+          }
+          break;
         }
-      } else {
-        continue;
       }
+      
+      if (!timeStr) continue;
       
       const date = parseDate(dateMatch[1], timeStr);
       
-      const idMatch = idAndType.match(/(\d{9})/);
+      const idMatch = block.match(/(\d{9})/);
       const id = idMatch ? idMatch[1] : `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       const isFreePlay = block.includes('[FREE PLAY]');
       
       let betType: ParsedBet['betType'] = 'STRAIGHT';
-      if (idAndType.includes('PLAYER PROPS')) {
+      if (block.includes('PLAYER PROPS')) {
         betType = 'PLAYER_PROPS';
-      } else if (idAndType.includes('PARLAY')) {
+      } else if (block.includes('PARLAY')) {
         betType = 'PARLAY';
       }
       
@@ -124,44 +236,27 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
       
       const odds = calculateAmericanOdds(stake, potentialWin);
       
-      const sport = detectSport(block);
-      
       let game = '';
       let description = '';
       let legs: string[] | undefined;
+      let sport: ParsedBet['sport'] = 'NFL';
       
       if (betType === 'PLAYER_PROPS') {
-        const gameMatch = block.match(/([A-Za-z\s]+(?:Chiefs|Cowboys|Bengals|Ravens|Bucks|Heat|Pacers|Raptors|Rockets|Warriors|Knicks|Hornets|Spurs|Blazers|Timberwolves|Thunder|Suns|Kings|Grizzlies|Pelicans|Giants|Patriots|Saints|Dolphins|Texans|Colts|49ers|Browns|Eagles|Bears|Lions|Packers|Navy|Memphis)[A-Za-z\s]*vs[A-Za-z\s]+(?:Chiefs|Cowboys|Bengals|Ravens|Bucks|Heat|Pacers|Raptors|Rockets|Warriors|Knicks|Hornets|Spurs|Blazers|Timberwolves|Thunder|Suns|Kings|Grizzlies|Pelicans|Giants|Patriots|Saints|Dolphins|Texans|Colts|49ers|Browns|Eagles|Bears|Lions|Packers|Navy|Memphis)[A-Za-z\s]*)/i);
-        if (gameMatch) {
-          game = gameMatch[1].trim();
-        }
-        
-        const propMatch = block.match(/([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i);
-        if (propMatch) {
-          description = `${propMatch[1].trim()} ${propMatch[2]} ${propMatch[3]} ${propMatch[4].trim()}`;
-        }
+        const propDetails = extractPlayerPropDetails(block);
+        game = propDetails.game;
+        description = propDetails.description;
+        sport = detectSport(block);
       } else if (betType === 'PARLAY') {
-        const legMatches = block.match(/\[[^\]]+\]\s*\[[^\]]+\]\s*-\s*\[[^\]]+\]\s*[^\[]+\[Pending\]/g);
-        if (legMatches) {
-          legs = legMatches.map(leg => {
-            const cleaned = leg.replace(/\[Pending\]/g, '').trim();
-            const teamMatch = cleaned.match(/(?:\d+H\s+)?([A-Z]+\s+[A-Z]+)\s+([+-]?[\d½]+(?:-\d+)?)/);
-            if (teamMatch) {
-              return `${teamMatch[1]} ${teamMatch[2]}`;
-            }
-            return cleaned;
-          });
-          description = `${legs.length}-Team Parlay`;
-          game = legs.join(' / ');
-        }
+        const parlayDetails = extractParlayDetails(block);
+        legs = parlayDetails.legs;
+        description = parlayDetails.description;
+        game = legs.join(' / ');
+        sport = detectSport(block);
       } else {
-        const straightMatch = block.match(/\[[^\]]+\]\s*\[([^\]]+)\]\s*-\s*\[\d+\]\s*([^\n\[]+)/);
-        if (straightMatch) {
-          const sportTag = straightMatch[1];
-          const betDetails = straightMatch[2].trim();
-          game = betDetails.split(/[+-]/)[0].trim();
-          description = betDetails;
-        }
+        const straightDetails = extractStraightBetDetails(block);
+        game = straightDetails.game;
+        description = straightDetails.description;
+        sport = straightDetails.sport;
       }
       
       const statusText = block.toLowerCase();
@@ -179,8 +274,8 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
         date,
         betType,
         sport,
-        game: game || 'Unknown',
-        description: description || game || 'Unknown bet',
+        game: game || 'Unknown Game',
+        description: description || 'Unknown bet',
         legs,
         status,
         stake: isFreePlay ? 0 : stake,

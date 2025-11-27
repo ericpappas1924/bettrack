@@ -4,127 +4,55 @@ import { BetTable } from "@/components/BetTable";
 import { BetFilters } from "@/components/BetFilters";
 import { AddBetDialog } from "@/components/AddBetDialog";
 import { BetDetailDialog } from "@/components/BetDetailDialog";
+import { ImportBetsDialog } from "@/components/ImportBetsDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload } from "lucide-react";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
 } from "@/lib/betting";
 
-//todo: remove mock functionality
-const initialMockBets = [
-  {
-    id: "1",
-    sport: "NBA",
-    betType: "Moneyline",
-    team: "Los Angeles Lakers",
-    openingOdds: "-150",
-    liveOdds: "-165",
-    closingOdds: "-165",
-    stake: "100",
-    status: "settled",
-    result: "won",
-    profit: "66.67",
-    clv: "3.5",
-    projectionSource: "Unabated NBA",
-    notes: "Strong value play",
-    createdAt: new Date("2024-11-20"),
-    settledAt: new Date("2024-11-21"),
-  },
-  {
-    id: "2",
-    sport: "NCAAF",
-    betType: "Spread -7",
-    team: "Alabama Crimson Tide",
-    openingOdds: "-110",
-    liveOdds: "-108",
-    closingOdds: "-108",
-    stake: "150",
-    status: "settled",
-    result: "lost",
-    profit: "-150",
-    clv: "-2.1",
-    projectionSource: "Unabated NCAAF",
-    notes: null,
-    createdAt: new Date("2024-11-21"),
-    settledAt: new Date("2024-11-22"),
-  },
-  {
-    id: "3",
-    sport: "NBA",
-    betType: "Over 225.5",
-    team: "Celtics vs Heat",
-    openingOdds: "-105",
-    liveOdds: "-120",
-    closingOdds: null,
-    stake: "200",
-    status: "active",
-    result: null,
-    profit: null,
-    clv: null,
-    projectionSource: "Unabated NBA",
-    notes: null,
-    createdAt: new Date("2024-11-25"),
-    settledAt: null,
-  },
-  {
-    id: "4",
-    sport: "NBA",
-    betType: "Spread +3.5",
-    team: "Golden State Warriors",
-    openingOdds: "-112",
-    liveOdds: "-125",
-    closingOdds: null,
-    stake: "100",
-    status: "active",
-    result: null,
-    profit: null,
-    clv: null,
-    projectionSource: "Unabated NBA",
-    notes: null,
-    createdAt: new Date("2024-11-26"),
-    settledAt: null,
-  },
-  {
-    id: "5",
-    sport: "NCAAF",
-    betType: "Moneyline",
-    team: "Ohio State Buckeyes",
-    openingOdds: "+165",
-    liveOdds: "+140",
-    closingOdds: null,
-    stake: "50",
-    status: "active",
-    result: null,
-    profit: null,
-    clv: null,
-    projectionSource: null,
-    notes: "Underdog value",
-    createdAt: new Date("2024-11-26"),
-    settledAt: null,
-  },
-];
-
-type BetType = typeof initialMockBets[0];
+interface AppBet {
+  id: string;
+  sport: string;
+  betType: string;
+  team: string;
+  game?: string;
+  openingOdds: string;
+  liveOdds: string | null;
+  closingOdds: string | null;
+  stake: string;
+  potentialWin?: string;
+  status: string;
+  result: string | null;
+  profit: string | null;
+  clv: string | null;
+  projectionSource: string | null;
+  notes: string | null;
+  isFreePlay?: boolean;
+  createdAt: Date;
+  settledAt: Date | null;
+}
 
 export default function Dashboard() {
-  const [bets, setBets] = useState(initialMockBets);
+  const [bets, setBets] = useState<AppBet[]>([]);
   const [addBetOpen, setAddBetOpen] = useState(false);
-  const [detailBet, setDetailBet] = useState<BetType | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [detailBet, setDetailBet] = useState<AppBet | null>(null);
   const [sport, setSport] = useState("all");
   const [status, setStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  //todo: remove mock functionality
   const filteredBets = bets.filter((bet) => {
     const matchesSport = sport === "all" || bet.sport === sport;
     const matchesStatus = status === "all" || bet.status === status;
     const matchesSearch =
       searchQuery === "" ||
       bet.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      bet.betType.toLowerCase().includes(searchQuery.toLowerCase());
+      bet.betType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (bet.game && bet.game.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesSport && matchesStatus && matchesSearch;
   });
 
@@ -145,6 +73,16 @@ export default function Dashboard() {
   );
   const roi = totalStaked > 0 ? (totalPL / totalStaked) * 100 : 0;
 
+  const totalAtRisk = activeBets.reduce(
+    (sum, bet) => sum + parseFloat(bet.stake),
+    0
+  );
+
+  const totalPotentialWin = activeBets.reduce(
+    (sum, bet) => sum + (bet.potentialWin ? parseFloat(bet.potentialWin) : 0),
+    0
+  );
+
   const totalLiveEV = activeBets.reduce((sum, bet) => {
     const openingOdds = parseFloat(bet.openingOdds);
     const liveOdds = bet.liveOdds ? parseFloat(bet.liveOdds) : openingOdds;
@@ -156,6 +94,15 @@ export default function Dashboard() {
   const handleAddBet = (data: any) => {
     console.log("Adding bet:", data);
     setAddBetOpen(false);
+  };
+
+  const handleImportBets = (importedBets: AppBet[]) => {
+    setBets((prev) => {
+      const existingIds = new Set(prev.map(b => b.id));
+      const newBets = importedBets.filter(b => !existingIds.has(b.id));
+      return [...prev, ...newBets];
+    });
+    setImportOpen(false);
   };
 
   const handleClearFilters = () => {
@@ -187,6 +134,10 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-bets">
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
             <Button onClick={() => setAddBetOpen(true)} data-testid="button-add-bet">
               <Plus className="h-4 w-4 mr-2" />
               Add Bet
@@ -201,40 +152,41 @@ export default function Dashboard() {
             <MetricCard
               label="Total P/L"
               value={`${totalPL >= 0 ? "$" : "-$"}${Math.abs(totalPL).toFixed(2)}`}
-              trend={{ value: "+12.5%", positive: totalPL >= 0 }}
+              trend={settledBets.length > 0 ? { value: `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`, positive: totalPL >= 0 } : undefined}
               icon={<DollarSign className="h-4 w-4" />}
             />
             <MetricCard
-              label="ROI"
-              value={`${roi.toFixed(1)}%`}
-              trend={{ value: "+2.1%", positive: roi >= 0 }}
-              icon={<TrendingUp className="h-4 w-4" />}
-            />
-            <MetricCard
               label="Win Rate"
-              value={`${winRate.toFixed(1)}%`}
-              trend={{ value: "+5.0%", positive: winRate >= 50 }}
+              value={settledBets.length > 0 ? `${winRate.toFixed(1)}%` : "-"}
+              trend={settledBets.length > 0 ? { value: `${wins}/${settledBets.length}`, positive: winRate >= 50 } : undefined}
               icon={<Target className="h-4 w-4" />}
             />
             <MetricCard
               label="Active Bets"
               value={activeBets.length.toString()}
+              trend={activeBets.length > 0 ? { value: `$${totalAtRisk.toFixed(0)} at risk`, positive: true } : undefined}
               icon={<BarChart3 className="h-4 w-4" />}
             />
             <MetricCard
-              label="Live Est. W/L"
+              label="Potential Win"
+              value={`$${totalPotentialWin.toFixed(2)}`}
+              trend={activeBets.length > 0 ? { value: `${activeBets.length} pending`, positive: true } : undefined}
+              icon={<TrendingUp className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Live Est. EV"
               value={`${totalLiveEV >= 0 ? "$" : "-$"}${Math.abs(totalLiveEV).toFixed(2)}`}
-              trend={{
+              trend={activeBets.length > 0 ? {
                 value: totalLiveEV >= 0 ? "+EV" : "-EV",
                 positive: totalLiveEV >= 0,
-              }}
+              } : undefined}
               icon={<Zap className="h-4 w-4" />}
             />
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
-              <h2 className="text-xl font-semibold">Recent Bets</h2>
+              <h2 className="text-xl font-semibold">Your Bets</h2>
             </div>
 
             <BetFilters
@@ -247,17 +199,24 @@ export default function Dashboard() {
               onClear={handleClearFilters}
             />
 
-            {filteredBets.length === 0 ? (
+            {bets.length === 0 ? (
+              <EmptyState
+                title="No bets yet"
+                description="Import your bets from your bookie or add them manually to start tracking your performance."
+                actionLabel="Import Bets"
+                onAction={() => setImportOpen(true)}
+              />
+            ) : filteredBets.length === 0 ? (
               <EmptyState
                 title="No bets found"
-                description="Try adjusting your filters or add your first bet to get started."
-                actionLabel="Add Bet"
-                onAction={() => setAddBetOpen(true)}
+                description="Try adjusting your filters to find your bets."
+                actionLabel="Clear Filters"
+                onAction={handleClearFilters}
               />
             ) : (
               <BetTable
                 bets={filteredBets}
-                onRowClick={(bet) => setDetailBet(bet as BetType)}
+                onRowClick={(bet) => setDetailBet(bet as AppBet)}
               />
             )}
           </div>
@@ -268,6 +227,12 @@ export default function Dashboard() {
         open={addBetOpen}
         onOpenChange={setAddBetOpen}
         onSubmit={handleAddBet}
+      />
+
+      <ImportBetsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImport={handleImportBets}
       />
 
       <BetDetailDialog

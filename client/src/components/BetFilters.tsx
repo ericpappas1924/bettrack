@@ -48,7 +48,9 @@ export function BetFilters({
         <SelectContent>
           <SelectItem value="all">All Sports</SelectItem>
           <SelectItem value="NBA">NBA</SelectItem>
+          <SelectItem value="NFL">NFL</SelectItem>
           <SelectItem value="NCAAF">NCAAF</SelectItem>
+          <SelectItem value="CFB">CFB</SelectItem>
         </SelectContent>
       </Select>
 

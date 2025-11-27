@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { MetricCard } from "@/components/MetricCard";
 import { BetTable } from "@/components/BetTable";
 import { BetFilters } from "@/components/BetFilters";
@@ -8,42 +9,87 @@ import { ImportBetsDialog } from "@/components/ImportBetsDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2 } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Bet } from "@shared/schema";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
 } from "@/lib/betting";
 
-interface AppBet {
-  id: string;
-  sport: string;
-  betType: string;
-  team: string;
-  game?: string;
-  openingOdds: string;
-  liveOdds: string | null;
-  closingOdds: string | null;
-  stake: string;
-  potentialWin?: string;
-  status: string;
-  result: string | null;
-  profit: string | null;
-  clv: string | null;
-  projectionSource: string | null;
-  notes: string | null;
-  isFreePlay?: boolean;
-  createdAt: Date;
-  settledAt: Date | null;
-}
-
 export default function Dashboard() {
-  const [bets, setBets] = useState<AppBet[]>([]);
+  const { toast } = useToast();
   const [addBetOpen, setAddBetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [detailBet, setDetailBet] = useState<AppBet | null>(null);
+  const [detailBet, setDetailBet] = useState<Bet | null>(null);
   const [sport, setSport] = useState("all");
   const [status, setStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: bets = [], isLoading } = useQuery<Bet[]>({
+    queryKey: ["/api/bets"],
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (importedBets: any[]) => {
+      const res = await apiRequest("POST", "/api/bets/import", importedBets);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "Bets imported",
+        description: `Successfully imported ${data.length} bets`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Import failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateBetMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; liveOdds?: string }) => {
+      const res = await apiRequest("PATCH", `/api/bets/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const settleBetMutation = useMutation({
+    mutationFn: async ({ id, result }: { id: string; result: "won" | "lost" | "push" }) => {
+      const res = await apiRequest("POST", `/api/bets/${id}/settle`, { result });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      setDetailBet(null);
+      toast({
+        title: "Bet settled",
+        description: "The bet has been marked as settled",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Settlement failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const filteredBets = bets.filter((bet) => {
     const matchesSport = sport === "all" || bet.sport === sport;
@@ -96,12 +142,28 @@ export default function Dashboard() {
     setAddBetOpen(false);
   };
 
-  const handleImportBets = (importedBets: AppBet[]) => {
-    setBets((prev) => {
-      const existingIds = new Set(prev.map(b => b.id));
-      const newBets = importedBets.filter(b => !existingIds.has(b.id));
-      return [...prev, ...newBets];
-    });
+  const handleImportBets = (importedBets: any[]) => {
+    const formattedBets = importedBets.map((bet) => ({
+      externalId: bet.id,
+      sport: bet.sport,
+      betType: bet.betType,
+      team: bet.team,
+      game: bet.game || null,
+      openingOdds: bet.openingOdds,
+      liveOdds: bet.liveOdds || null,
+      closingOdds: bet.closingOdds || null,
+      stake: bet.stake,
+      potentialWin: bet.potentialWin || null,
+      status: bet.status,
+      result: bet.result || null,
+      profit: bet.profit || null,
+      clv: bet.clv || null,
+      projectionSource: bet.projectionSource || null,
+      notes: bet.notes || null,
+      isFreePlay: bet.isFreePlay || false,
+      settledAt: bet.settledAt || null,
+    }));
+    importMutation.mutate(formattedBets);
     setImportOpen(false);
   };
 
@@ -112,15 +174,25 @@ export default function Dashboard() {
   };
 
   const handleUpdateLiveOdds = (betId: string, liveOdds: string) => {
-    setBets((prev) =>
-      prev.map((bet) =>
-        bet.id === betId ? { ...bet, liveOdds } : bet
-      )
-    );
+    updateBetMutation.mutate({ id: betId, liveOdds });
     if (detailBet && detailBet.id === betId) {
       setDetailBet({ ...detailBet, liveOdds });
     }
   };
+
+  const handleSettleBet = (result: "won" | "lost" | "push") => {
+    if (detailBet) {
+      settleBetMutation.mutate({ id: detailBet.id, result });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -216,7 +288,7 @@ export default function Dashboard() {
             ) : (
               <BetTable
                 bets={filteredBets}
-                onRowClick={(bet) => setDetailBet(bet as AppBet)}
+                onRowClick={(bet) => setDetailBet(bet as Bet)}
               />
             )}
           </div>
@@ -240,6 +312,7 @@ export default function Dashboard() {
         open={!!detailBet}
         onOpenChange={(open) => !open && setDetailBet(null)}
         onUpdateLiveOdds={handleUpdateLiveOdds}
+        onSettle={handleSettleBet}
       />
     </div>
   );

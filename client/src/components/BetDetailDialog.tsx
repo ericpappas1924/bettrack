@@ -4,17 +4,17 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Edit2, Check, X } from "lucide-react";
+import { Edit2, Check, X, Trophy, ThumbsDown, Minus } from "lucide-react";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
@@ -26,16 +26,19 @@ interface Bet {
   sport: string;
   betType: string;
   team: string;
+  game?: string | null;
   openingOdds: string;
   liveOdds?: string | null;
   closingOdds?: string | null;
   stake: string;
+  potentialWin?: string | null;
   status: string;
   result?: string | null;
   profit?: string | null;
   clv?: string | null;
   projectionSource?: string | null;
   notes?: string | null;
+  isFreePlay?: boolean;
   createdAt: Date | string;
   settledAt?: Date | string | null;
 }
@@ -45,9 +48,10 @@ interface BetDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdateLiveOdds?: (betId: string, liveOdds: string) => void;
+  onSettle?: (result: "won" | "lost" | "push") => void;
 }
 
-export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: BetDetailDialogProps) {
+export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle }: BetDetailDialogProps) {
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
 
@@ -101,7 +105,12 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: B
           <div className="flex items-start justify-between gap-4">
             <div>
               <DialogTitle className="text-2xl">{bet.team}</DialogTitle>
-              <p className="text-muted-foreground mt-1">{bet.betType}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-muted-foreground">{bet.betType}</span>
+                {bet.isFreePlay && (
+                  <Badge className="bg-green-600 text-white">FREE PLAY</Badge>
+                )}
+              </div>
             </div>
             <BetStatusBadge status={bet.status} result={bet.result} />
           </div>
@@ -110,7 +119,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: B
         <div className="space-y-6">
           {bet.status === "active" && (
             <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-lg">Live Performance</CardTitle>
               </CardHeader>
               <CardContent>
@@ -199,6 +208,13 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: B
                 <Badge variant="secondary">{bet.sport}</Badge>
               </div>
 
+              {bet.game && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Game</p>
+                  <p className="text-base">{bet.game}</p>
+                </div>
+              )}
+
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Opening Odds</p>
                 <p className="text-lg font-semibold tabular-nums">{formatOdds(bet.openingOdds)}</p>
@@ -213,6 +229,13 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: B
                 <p className="text-sm text-muted-foreground mb-1">Stake</p>
                 <p className="text-lg font-semibold tabular-nums">{formatCurrency(bet.stake)}</p>
               </div>
+
+              {bet.potentialWin && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Potential Win</p>
+                  <p className="text-lg font-semibold tabular-nums">{formatCurrency(bet.potentialWin)}</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -279,11 +302,42 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds }: B
               <Separator />
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Notes</p>
-                <p className="text-base">{bet.notes}</p>
+                <p className="text-base whitespace-pre-line">{bet.notes}</p>
               </div>
             </>
           )}
         </div>
+
+        {bet.status === "active" && onSettle && (
+          <DialogFooter className="mt-6 gap-2">
+            <p className="text-sm text-muted-foreground mr-auto">Mark as:</p>
+            <Button
+              variant="outline"
+              onClick={() => onSettle("push")}
+              data-testid="button-settle-push"
+            >
+              <Minus className="h-4 w-4 mr-2" />
+              Push
+            </Button>
+            <Button
+              variant="outline"
+              className="border-red-500/50 text-red-600 hover:bg-red-500/10"
+              onClick={() => onSettle("lost")}
+              data-testid="button-settle-lost"
+            >
+              <ThumbsDown className="h-4 w-4 mr-2" />
+              Lost
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              onClick={() => onSettle("won")}
+              data-testid="button-settle-won"
+            >
+              <Trophy className="h-4 w-4 mr-2" />
+              Won
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,10 +1,13 @@
+import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool } from "@neondatabase/serverless";
 import { eq } from "drizzle-orm";
 import { bets, type Bet, type InsertBet, type UpdateBet } from "@shared/schema";
+import ws from "ws";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool);
+neonConfig.webSocketConstructor = ws;
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+export const db = drizzle({ client: pool });
 
 export interface IStorage {
   getAllBets(): Promise<Bet[]>;

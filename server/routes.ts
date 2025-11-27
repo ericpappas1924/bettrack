@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertBetSchema, updateBetSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
@@ -9,10 +10,26 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
-  app.get("/api/bets", async (req, res) => {
+  // Setup auth middleware
+  await setupAuth(app);
+
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const bets = await storage.getAllBets();
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Bet routes - all protected
+  app.get("/api/bets", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const bets = await storage.getAllBets(userId);
       res.json(bets);
     } catch (error) {
       console.error("Error fetching bets:", error);
@@ -20,11 +37,15 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/bets/:id", async (req, res) => {
+  app.get("/api/bets/:id", isAuthenticated, async (req: any, res) => {
     try {
       const bet = await storage.getBet(req.params.id);
       if (!bet) {
         return res.status(404).json({ error: "Bet not found" });
+      }
+      // Ensure user owns this bet
+      if (bet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       res.json(bet);
     } catch (error) {
@@ -33,9 +54,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/bets", async (req, res) => {
+  app.post("/api/bets", isAuthenticated, async (req: any, res) => {
     try {
-      const validatedData = insertBetSchema.parse(req.body);
+      const userId = req.user.claims.sub;
+      const validatedData = insertBetSchema.parse({ ...req.body, userId });
       const bet = await storage.createBet(validatedData);
       res.status(201).json(bet);
     } catch (error) {
@@ -48,9 +70,11 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/bets/import", async (req, res) => {
+  app.post("/api/bets/import", isAuthenticated, async (req: any, res) => {
     try {
-      const betsArray = z.array(insertBetSchema).parse(req.body);
+      const userId = req.user.claims.sub;
+      const betsWithUser = req.body.map((bet: any) => ({ ...bet, userId }));
+      const betsArray = z.array(insertBetSchema).parse(betsWithUser);
       const createdBets = await storage.createBets(betsArray);
       res.status(201).json(createdBets);
     } catch (error) {
@@ -63,13 +87,18 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/bets/:id", async (req, res) => {
+  app.patch("/api/bets/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const validatedData = updateBetSchema.parse(req.body);
-      const bet = await storage.updateBet(req.params.id, validatedData);
-      if (!bet) {
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
         return res.status(404).json({ error: "Bet not found" });
       }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const validatedData = updateBetSchema.parse(req.body);
+      const bet = await storage.updateBet(req.params.id, validatedData);
       res.json(bet);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -81,12 +110,17 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/bets/:id", async (req, res) => {
+  app.delete("/api/bets/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const deleted = await storage.deleteBet(req.params.id);
-      if (!deleted) {
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
         return res.status(404).json({ error: "Bet not found" });
       }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const deleted = await storage.deleteBet(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting bet:", error);
@@ -94,7 +128,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/bets/:id/settle", async (req, res) => {
+  app.post("/api/bets/:id/settle", isAuthenticated, async (req: any, res) => {
     try {
       const { result } = z.object({ 
         result: z.enum(["won", "lost", "push"]) 
@@ -103,6 +137,9 @@ export async function registerRoutes(
       const existingBet = await storage.getBet(req.params.id);
       if (!existingBet) {
         return res.status(404).json({ error: "Bet not found" });
+      }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       
       const stake = parseFloat(existingBet.stake);

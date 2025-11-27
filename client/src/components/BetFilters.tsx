@@ -28,9 +28,12 @@ export function BetFilters({
   onSearchChange,
   onClear,
 }: BetFiltersProps) {
+  const hasFilters = sport !== "all" || status !== "all" || searchQuery !== "";
+
   return (
-    <div className="flex flex-wrap gap-4 items-center">
-      <div className="relative flex-1 min-w-64">
+    <div className="space-y-3">
+      {/* Search - Full Width on Mobile */}
+      <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search bets..."
@@ -41,39 +44,43 @@ export function BetFilters({
         />
       </div>
 
-      <Select value={sport} onValueChange={onSportChange}>
-        <SelectTrigger className="w-40" data-testid="select-sport-filter">
-          <SelectValue placeholder="All Sports" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Sports</SelectItem>
-          <SelectItem value="NBA">NBA</SelectItem>
-          <SelectItem value="NFL">NFL</SelectItem>
-          <SelectItem value="NCAAF">NCAAF</SelectItem>
-          <SelectItem value="CFB">CFB</SelectItem>
-        </SelectContent>
-      </Select>
+      {/* Filter Row */}
+      <div className="flex gap-2 items-center">
+        <Select value={sport} onValueChange={onSportChange}>
+          <SelectTrigger className="flex-1 md:w-32 md:flex-none" data-testid="select-sport-filter">
+            <SelectValue placeholder="Sport" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sports</SelectItem>
+            <SelectItem value="NBA">NBA</SelectItem>
+            <SelectItem value="NFL">NFL</SelectItem>
+            <SelectItem value="NCAAF">NCAAF</SelectItem>
+            <SelectItem value="CFB">CFB</SelectItem>
+          </SelectContent>
+        </Select>
 
-      <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="w-40" data-testid="select-status-filter">
-          <SelectValue placeholder="All Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Status</SelectItem>
-          <SelectItem value="active">Active</SelectItem>
-          <SelectItem value="settled">Settled</SelectItem>
-          <SelectItem value="pending">Pending</SelectItem>
-        </SelectContent>
-      </Select>
+        <Select value={status} onValueChange={onStatusChange}>
+          <SelectTrigger className="flex-1 md:w-32 md:flex-none" data-testid="select-status-filter">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="settled">Settled</SelectItem>
+          </SelectContent>
+        </Select>
 
-      <Button 
-        variant="ghost" 
-        onClick={onClear}
-        data-testid="button-clear-filters"
-      >
-        <X className="h-4 w-4 mr-2" />
-        Clear
-      </Button>
+        {hasFilters && (
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={onClear}
+            data-testid="button-clear-filters"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

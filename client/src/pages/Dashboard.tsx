@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { MetricCard } from "@/components/MetricCard";
 import { BetTable } from "@/components/BetTable";
 import { BetFilters } from "@/components/BetFilters";
@@ -9,9 +10,18 @@ import { ImportBetsDialog } from "@/components/ImportBetsDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { isUnauthorizedError } from "@/lib/authUtils";
 import type { Bet } from "@shared/schema";
 import {
   americanToImpliedProbability,
@@ -19,6 +29,7 @@ import {
 } from "@/lib/betting";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [addBetOpen, setAddBetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -44,11 +55,12 @@ export default function Dashboard() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Import failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -61,11 +73,12 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Update failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -77,17 +90,15 @@ export default function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
       setDetailBet(null);
-      toast({
-        title: "Bet settled",
-        description: "The bet has been marked as settled",
-      });
+      toast({ title: "Bet settled", description: "The bet has been marked as settled" });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Settlement failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Settlement failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -186,6 +197,16 @@ export default function Dashboard() {
     }
   };
 
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase();
+    }
+    return "U";
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -195,32 +216,46 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="flex items-center justify-between px-6 lg:px-8 py-4">
+    <div className="min-h-screen bg-background pb-20 md:pb-0">
+      {/* Header */}
+      <header className="border-b sticky top-0 bg-background z-50">
+        <div className="flex items-center justify-between px-4 py-3 max-w-7xl mx-auto">
           <div>
-            <h1 className="text-2xl font-bold">BetTrack</h1>
-            <p className="text-sm text-muted-foreground">
-              Sports Betting Performance Tracker
-            </p>
+            <h1 className="text-xl font-bold">BetTrack</h1>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" onClick={() => setImportOpen(true)} data-testid="button-import-bets">
-              <Upload className="h-4 w-4 mr-2" />
-              Import
-            </Button>
-            <Button onClick={() => setAddBetOpen(true)} data-testid="button-add-bet">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Bet
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full" data-testid="button-user-menu">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || "User"} />
+                    <AvatarFallback>{getUserInitials()}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled>
+                  <User className="h-4 w-4 mr-2" />
+                  {user?.email || "User"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href="/api/logout" data-testid="button-logout">
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
 
-      <main className="px-6 lg:px-8 py-8 max-w-7xl mx-auto">
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <main className="px-4 py-6 max-w-7xl mx-auto">
+        <div className="space-y-6">
+          {/* Metrics Grid - Scrollable on mobile */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <MetricCard
               label="Total P/L"
               value={`${totalPL >= 0 ? "$" : "-$"}${Math.abs(totalPL).toFixed(2)}`}
@@ -229,36 +264,48 @@ export default function Dashboard() {
             />
             <MetricCard
               label="Win Rate"
-              value={settledBets.length > 0 ? `${winRate.toFixed(1)}%` : "-"}
+              value={settledBets.length > 0 ? `${winRate.toFixed(0)}%` : "-"}
               trend={settledBets.length > 0 ? { value: `${wins}/${settledBets.length}`, positive: winRate >= 50 } : undefined}
               icon={<Target className="h-4 w-4" />}
             />
             <MetricCard
-              label="Active Bets"
+              label="Active"
               value={activeBets.length.toString()}
-              trend={activeBets.length > 0 ? { value: `$${totalAtRisk.toFixed(0)} at risk`, positive: true } : undefined}
+              trend={activeBets.length > 0 ? { value: `$${totalAtRisk.toFixed(0)}`, positive: true } : undefined}
               icon={<BarChart3 className="h-4 w-4" />}
             />
             <MetricCard
-              label="Potential Win"
-              value={`$${totalPotentialWin.toFixed(2)}`}
-              trend={activeBets.length > 0 ? { value: `${activeBets.length} pending`, positive: true } : undefined}
+              label="To Win"
+              value={`$${totalPotentialWin.toFixed(0)}`}
+              trend={activeBets.length > 0 ? { value: `${activeBets.length} bets`, positive: true } : undefined}
               icon={<TrendingUp className="h-4 w-4" />}
             />
             <MetricCard
-              label="Live Est. EV"
-              value={`${totalLiveEV >= 0 ? "$" : "-$"}${Math.abs(totalLiveEV).toFixed(2)}`}
+              label="Est. EV"
+              value={`${totalLiveEV >= 0 ? "$" : "-$"}${Math.abs(totalLiveEV).toFixed(0)}`}
               trend={activeBets.length > 0 ? {
                 value: totalLiveEV >= 0 ? "+EV" : "-EV",
                 positive: totalLiveEV >= 0,
               } : undefined}
               icon={<Zap className="h-4 w-4" />}
+              className="col-span-2 md:col-span-1"
             />
           </div>
 
+          {/* Bets Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <h2 className="text-xl font-semibold">Your Bets</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Your Bets</h2>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} data-testid="button-import-bets">
+                  <Upload className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Import</span>
+                </Button>
+                <Button size="sm" onClick={() => setAddBetOpen(true)} data-testid="button-add-bet">
+                  <Plus className="h-4 w-4 md:mr-2" />
+                  <span className="hidden md:inline">Add Bet</span>
+                </Button>
+              </div>
             </div>
 
             <BetFilters
@@ -274,14 +321,14 @@ export default function Dashboard() {
             {bets.length === 0 ? (
               <EmptyState
                 title="No bets yet"
-                description="Import your bets from your bookie or add them manually to start tracking your performance."
+                description="Import your bets or add them manually to start tracking."
                 actionLabel="Import Bets"
                 onAction={() => setImportOpen(true)}
               />
             ) : filteredBets.length === 0 ? (
               <EmptyState
                 title="No bets found"
-                description="Try adjusting your filters to find your bets."
+                description="Try adjusting your filters."
                 actionLabel="Clear Filters"
                 onAction={handleClearFilters}
               />
@@ -294,6 +341,18 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Mobile Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-3 flex gap-2 md:hidden">
+        <Button variant="outline" className="flex-1" onClick={() => setImportOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Import
+        </Button>
+        <Button className="flex-1" onClick={() => setAddBetOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Bet
+        </Button>
+      </div>
 
       <AddBetDialog
         open={addBetOpen}

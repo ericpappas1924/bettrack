@@ -38,7 +38,7 @@ interface Bet {
   clv?: string | null;
   projectionSource?: string | null;
   notes?: string | null;
-  isFreePlay?: boolean;
+  isFreePlay?: boolean | null;
   createdAt: Date | string;
   settledAt?: Date | string | null;
 }

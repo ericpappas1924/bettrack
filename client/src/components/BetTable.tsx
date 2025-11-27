@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ interface Bet {
   openingOdds: string;
   liveOdds?: string | null;
   stake: string;
+  potentialWin?: string | null;
   status: string;
   result?: string | null;
   profit?: string | null;
@@ -48,12 +50,6 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
     return num > 0 ? `+${num}` : num.toString();
   };
 
-  const formatCLV = (clv: string | null | undefined) => {
-    if (!clv) return "-";
-    const num = parseFloat(clv);
-    return num >= 0 ? `+${num.toFixed(1)}%` : `${num.toFixed(1)}%`;
-  };
-
   const getWinProbabilities = (bet: Bet) => {
     const openingOdds = parseFloat(bet.openingOdds);
     const baselineProbability = americanToImpliedProbability(openingOdds);
@@ -74,31 +70,134 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
     return calculateExpectedValue(stake, odds, liveProbability);
   };
 
+  if (bets.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No bets found
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-24">Date</TableHead>
-            <TableHead className="w-20">Sport</TableHead>
-            <TableHead>Team/Player</TableHead>
-            <TableHead className="w-24 text-right">Odds</TableHead>
-            <TableHead className="w-24 text-right">Stake</TableHead>
-            <TableHead className="w-28 text-center">Win % Change</TableHead>
-            <TableHead className="w-28 text-right">Est. W/L</TableHead>
-            <TableHead className="w-24">Status</TableHead>
-            <TableHead className="w-24 text-right">P/L</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {bets.length === 0 ? (
+    <>
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {bets.map((bet) => {
+          const { baselineProbability, liveProbability } = getWinProbabilities(bet);
+          const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
+
+          return (
+            <Card
+              key={bet.id}
+              className="hover-elevate cursor-pointer"
+              onClick={() => onRowClick?.(bet)}
+              data-testid={`card-bet-${bet.id}`}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Badge variant="secondary" className="text-xs">{bet.sport}</Badge>
+                      <BetStatusBadge status={bet.status} result={bet.result} />
+                    </div>
+                    <p className="font-medium truncate">{bet.team}</p>
+                    <p className="text-xs text-muted-foreground">{bet.betType}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-lg font-bold tabular-nums">
+                      {formatOdds(bet.openingOdds)}
+                    </p>
+                    {bet.liveOdds && bet.status === "active" && (
+                      <p className="text-xs text-muted-foreground">
+                        Live: {formatOdds(bet.liveOdds)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-3 border-t">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Stake</p>
+                    <p className="font-semibold tabular-nums text-sm">
+                      {formatCurrency(bet.stake)}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    {bet.status === "active" ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">Win %</p>
+                        <LiveProbabilityBadge
+                          baselineProbability={baselineProbability}
+                          liveProbability={liveProbability}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">P/L</p>
+                        <p
+                          className={`font-semibold tabular-nums text-sm ${
+                            bet.profit && parseFloat(bet.profit) > 0
+                              ? "text-green-600 dark:text-green-500"
+                              : bet.profit && parseFloat(bet.profit) < 0
+                              ? "text-red-600 dark:text-red-500"
+                              : ""
+                          }`}
+                        >
+                          {formatCurrency(bet.profit)}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {bet.status === "active" ? (
+                      <>
+                        <p className="text-xs text-muted-foreground">Est. W/L</p>
+                        <p
+                          className={`font-semibold tabular-nums text-sm ${
+                            estimatedEV !== null && estimatedEV > 0
+                              ? "text-green-600 dark:text-green-500"
+                              : estimatedEV !== null && estimatedEV < 0
+                              ? "text-red-600 dark:text-red-500"
+                              : ""
+                          }`}
+                        >
+                          {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">To Win</p>
+                        <p className="font-semibold tabular-nums text-sm">
+                          {formatCurrency(bet.potentialWin)}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block rounded-md border overflow-x-auto">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                No bets found
-              </TableCell>
+              <TableHead className="w-24">Date</TableHead>
+              <TableHead className="w-20">Sport</TableHead>
+              <TableHead>Team/Player</TableHead>
+              <TableHead className="w-24 text-right">Odds</TableHead>
+              <TableHead className="w-24 text-right">Stake</TableHead>
+              <TableHead className="w-28 text-center">Win % Change</TableHead>
+              <TableHead className="w-28 text-right">Est. W/L</TableHead>
+              <TableHead className="w-24">Status</TableHead>
+              <TableHead className="w-24 text-right">P/L</TableHead>
             </TableRow>
-          ) : (
-            bets.map((bet) => {
+          </TableHeader>
+          <TableBody>
+            {bets.map((bet) => {
               const { baselineProbability, liveProbability } = getWinProbabilities(bet);
               const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
 
@@ -175,10 +274,10 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
                   </TableCell>
                 </TableRow>
               );
-            })
-          )}
-        </TableBody>
-      </Table>
-    </div>
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }

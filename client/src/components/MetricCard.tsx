@@ -10,11 +10,12 @@ interface MetricCardProps {
     positive: boolean;
   };
   icon?: React.ReactNode;
+  className?: string;
 }
 
-export function MetricCard({ label, value, trend, icon }: MetricCardProps) {
+export function MetricCard({ label, value, trend, icon, className }: MetricCardProps) {
   return (
-    <Card data-testid={`card-metric-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+    <Card className={className} data-testid={`card-metric-${label.toLowerCase().replace(/\s+/g, '-')}`}>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
         {icon && <div className="text-muted-foreground">{icon}</div>}

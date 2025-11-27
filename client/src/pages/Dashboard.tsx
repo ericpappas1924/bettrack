@@ -7,16 +7,21 @@ import { BetDetailDialog } from "@/components/BetDetailDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3 } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap } from "lucide-react";
+import {
+  americanToImpliedProbability,
+  calculateExpectedValue,
+} from "@/lib/betting";
 
 //todo: remove mock functionality
-const mockBets = [
+const initialMockBets = [
   {
     id: "1",
     sport: "NBA",
     betType: "Moneyline",
     team: "Los Angeles Lakers",
     openingOdds: "-150",
+    liveOdds: "-165",
     closingOdds: "-165",
     stake: "100",
     status: "settled",
@@ -34,6 +39,7 @@ const mockBets = [
     betType: "Spread -7",
     team: "Alabama Crimson Tide",
     openingOdds: "-110",
+    liveOdds: "-108",
     closingOdds: "-108",
     stake: "150",
     status: "settled",
@@ -51,12 +57,13 @@ const mockBets = [
     betType: "Over 225.5",
     team: "Celtics vs Heat",
     openingOdds: "-105",
+    liveOdds: "-120",
     closingOdds: null,
     stake: "200",
     status: "active",
     result: null,
     profit: null,
-    clv: "1.8",
+    clv: null,
     projectionSource: "Unabated NBA",
     notes: null,
     createdAt: new Date("2024-11-25"),
@@ -68,16 +75,17 @@ const mockBets = [
     betType: "Spread +3.5",
     team: "Golden State Warriors",
     openingOdds: "-112",
-    closingOdds: "-115",
+    liveOdds: "-125",
+    closingOdds: null,
     stake: "100",
-    status: "settled",
-    result: "won",
-    profit: "89.29",
-    clv: "2.8",
+    status: "active",
+    result: null,
+    profit: null,
+    clv: null,
     projectionSource: "Unabated NBA",
     notes: null,
-    createdAt: new Date("2024-11-22"),
-    settledAt: new Date("2024-11-23"),
+    createdAt: new Date("2024-11-26"),
+    settledAt: null,
   },
   {
     id: "5",
@@ -85,22 +93,24 @@ const mockBets = [
     betType: "Moneyline",
     team: "Ohio State Buckeyes",
     openingOdds: "+165",
-    closingOdds: "+155",
+    liveOdds: "+140",
+    closingOdds: null,
     stake: "50",
-    status: "settled",
-    result: "won",
-    profit: "82.50",
-    clv: "-4.2",
+    status: "active",
+    result: null,
+    profit: null,
+    clv: null,
     projectionSource: null,
     notes: "Underdog value",
-    createdAt: new Date("2024-11-18"),
-    settledAt: new Date("2024-11-19"),
+    createdAt: new Date("2024-11-26"),
+    settledAt: null,
   },
 ];
 
-type BetType = typeof mockBets[0];
+type BetType = typeof initialMockBets[0];
 
 export default function Dashboard() {
+  const [bets, setBets] = useState(initialMockBets);
   const [addBetOpen, setAddBetOpen] = useState(false);
   const [detailBet, setDetailBet] = useState<BetType | null>(null);
   const [sport, setSport] = useState("all");
@@ -108,7 +118,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
 
   //todo: remove mock functionality
-  const filteredBets = mockBets.filter((bet) => {
+  const filteredBets = bets.filter((bet) => {
     const matchesSport = sport === "all" || bet.sport === sport;
     const matchesStatus = status === "all" || bet.status === status;
     const matchesSearch =
@@ -117,6 +127,31 @@ export default function Dashboard() {
       bet.betType.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSport && matchesStatus && matchesSearch;
   });
+
+  const activeBets = bets.filter((bet) => bet.status === "active");
+  const settledBets = bets.filter((bet) => bet.status === "settled");
+
+  const totalPL = settledBets.reduce(
+    (sum, bet) => sum + (bet.profit ? parseFloat(bet.profit) : 0),
+    0
+  );
+
+  const wins = settledBets.filter((bet) => bet.result === "won").length;
+  const winRate = settledBets.length > 0 ? (wins / settledBets.length) * 100 : 0;
+
+  const totalStaked = settledBets.reduce(
+    (sum, bet) => sum + parseFloat(bet.stake),
+    0
+  );
+  const roi = totalStaked > 0 ? (totalPL / totalStaked) * 100 : 0;
+
+  const totalLiveEV = activeBets.reduce((sum, bet) => {
+    const openingOdds = parseFloat(bet.openingOdds);
+    const liveOdds = bet.liveOdds ? parseFloat(bet.liveOdds) : openingOdds;
+    const stake = parseFloat(bet.stake);
+    const liveProbability = americanToImpliedProbability(liveOdds);
+    return sum + calculateExpectedValue(stake, liveOdds, liveProbability);
+  }, 0);
 
   const handleAddBet = (data: any) => {
     console.log("Adding bet:", data);
@@ -127,6 +162,17 @@ export default function Dashboard() {
     setSport("all");
     setStatus("all");
     setSearchQuery("");
+  };
+
+  const handleUpdateLiveOdds = (betId: string, liveOdds: string) => {
+    setBets((prev) =>
+      prev.map((bet) =>
+        bet.id === betId ? { ...bet, liveOdds } : bet
+      )
+    );
+    if (detailBet && detailBet.id === betId) {
+      setDetailBet({ ...detailBet, liveOdds });
+    }
   };
 
   return (
@@ -151,30 +197,38 @@ export default function Dashboard() {
 
       <main className="px-6 lg:px-8 py-8 max-w-7xl mx-auto">
         <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <MetricCard
               label="Total P/L"
-              value="$138.46"
-              trend={{ value: "+12.5%", positive: true }}
+              value={`${totalPL >= 0 ? "$" : "-$"}${Math.abs(totalPL).toFixed(2)}`}
+              trend={{ value: "+12.5%", positive: totalPL >= 0 }}
               icon={<DollarSign className="h-4 w-4" />}
             />
             <MetricCard
               label="ROI"
-              value="23.1%"
-              trend={{ value: "+2.1%", positive: true }}
+              value={`${roi.toFixed(1)}%`}
+              trend={{ value: "+2.1%", positive: roi >= 0 }}
               icon={<TrendingUp className="h-4 w-4" />}
             />
             <MetricCard
               label="Win Rate"
-              value="60.0%"
-              trend={{ value: "+5.0%", positive: true }}
+              value={`${winRate.toFixed(1)}%`}
+              trend={{ value: "+5.0%", positive: winRate >= 50 }}
               icon={<Target className="h-4 w-4" />}
             />
             <MetricCard
-              label="Avg CLV"
-              value="+0.4%"
-              trend={{ value: "-0.2%", positive: false }}
+              label="Active Bets"
+              value={activeBets.length.toString()}
               icon={<BarChart3 className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Live Est. W/L"
+              value={`${totalLiveEV >= 0 ? "$" : "-$"}${Math.abs(totalLiveEV).toFixed(2)}`}
+              trend={{
+                value: totalLiveEV >= 0 ? "+EV" : "-EV",
+                positive: totalLiveEV >= 0,
+              }}
+              icon={<Zap className="h-4 w-4" />}
             />
           </div>
 
@@ -220,6 +274,7 @@ export default function Dashboard() {
         bet={detailBet}
         open={!!detailBet}
         onOpenChange={(open) => !open && setDetailBet(null)}
+        onUpdateLiveOdds={handleUpdateLiveOdds}
       />
     </div>
   );

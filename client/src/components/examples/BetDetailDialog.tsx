@@ -4,23 +4,27 @@ import { Button } from "@/components/ui/button";
 
 export default function BetDetailDialogExample() {
   const [open, setOpen] = useState(false);
-
-  const mockBet = {
+  const [mockBet, setMockBet] = useState({
     id: "1",
     sport: "NBA",
     betType: "Moneyline",
     team: "Los Angeles Lakers",
     openingOdds: "-150",
-    closingOdds: "-165",
+    liveOdds: "-165",
+    closingOdds: null,
     stake: "100",
-    status: "settled",
-    result: "won",
-    profit: "66.67",
-    clv: "3.5",
+    status: "active",
+    result: null,
+    profit: null,
+    clv: null,
     projectionSource: "Unabated NBA",
-    notes: "Strong value play. Lakers injury report favorable, opponent on second night of back-to-back.",
+    notes: "Strong value play. Lakers injury report favorable.",
     createdAt: new Date("2024-11-20"),
-    settledAt: new Date("2024-11-21"),
+    settledAt: null,
+  });
+
+  const handleUpdateLiveOdds = (betId: string, liveOdds: string) => {
+    setMockBet((prev) => ({ ...prev, liveOdds }));
   };
 
   return (
@@ -31,6 +35,7 @@ export default function BetDetailDialogExample() {
           bet={mockBet}
           open={open}
           onOpenChange={setOpen}
+          onUpdateLiveOdds={handleUpdateLiveOdds}
         />
       </div>
     </div>

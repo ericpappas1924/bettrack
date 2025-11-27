@@ -1,38 +1,50 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool } from "@neondatabase/serverless";
+import { eq } from "drizzle-orm";
+import { bets, type Bet, type InsertBet, type UpdateBet } from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const db = drizzle(pool);
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getAllBets(): Promise<Bet[]>;
+  getBet(id: string): Promise<Bet | undefined>;
+  createBet(bet: InsertBet): Promise<Bet>;
+  createBets(bets: InsertBet[]): Promise<Bet[]>;
+  updateBet(id: string, bet: UpdateBet): Promise<Bet | undefined>;
+  deleteBet(id: string): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async getAllBets(): Promise<Bet[]> {
+    return await db.select().from(bets).orderBy(bets.createdAt);
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getBet(id: string): Promise<Bet | undefined> {
+    const result = await db.select().from(bets).where(eq(bets.id, id));
+    return result[0];
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async createBet(bet: InsertBet): Promise<Bet> {
+    const result = await db.insert(bets).values(bet).returning();
+    return result[0];
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async createBets(betList: InsertBet[]): Promise<Bet[]> {
+    if (betList.length === 0) return [];
+    const result = await db.insert(bets).values(betList).returning();
+    return result;
+  }
+
+  async updateBet(id: string, bet: UpdateBet): Promise<Bet | undefined> {
+    const result = await db.update(bets).set(bet).where(eq(bets.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteBet(id: string): Promise<boolean> {
+    const result = await db.delete(bets).where(eq(bets.id, id)).returning();
+    return result.length > 0;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

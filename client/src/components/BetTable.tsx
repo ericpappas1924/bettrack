@@ -180,7 +180,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                       </p>
                     </div>
                   )}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Stake</p>
                       <p className="font-semibold tabular-nums text-sm">
@@ -212,6 +212,20 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           </p>
                         </>
                       )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">CLV</p>
+                      <p
+                        className={`font-semibold tabular-nums text-sm ${
+                          bet.clv && parseFloat(bet.clv) > 0
+                            ? "text-green-600 dark:text-green-500"
+                            : bet.clv && parseFloat(bet.clv) < 0
+                            ? "text-red-600 dark:text-red-500"
+                            : ""
+                        }`}
+                      >
+                        {bet.clv ? `${parseFloat(bet.clv) > 0 ? '+' : ''}${parseFloat(bet.clv).toFixed(1)}%` : "-"}
+                      </p>
                     </div>
                     <div className="text-right">
                       {bet.status === "active" ? (
@@ -259,6 +273,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
               <TableHead className="w-24 text-right">Stake</TableHead>
               <TableHead className="w-28 text-center">Win % Change</TableHead>
               <TableHead className="w-28 text-right">Est. W/L</TableHead>
+              <TableHead className="w-20 text-right">CLV</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-24 text-right">P/L</TableHead>
               <TableHead className="w-16"></TableHead>
@@ -335,6 +350,18 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     data-testid={`text-ev-${bet.id}`}
                   >
                     {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right tabular-nums text-sm font-semibold ${
+                      bet.clv && parseFloat(bet.clv) > 0
+                        ? "text-green-600 dark:text-green-500"
+                        : bet.clv && parseFloat(bet.clv) < 0
+                        ? "text-red-600 dark:text-red-500"
+                        : ""
+                    }`}
+                    data-testid={`text-clv-${bet.id}`}
+                  >
+                    {bet.clv ? `${parseFloat(bet.clv) > 0 ? '+' : ''}${parseFloat(bet.clv).toFixed(1)}%` : "-"}
                   </TableCell>
                   <TableCell>
                     <BetStatusBadge status={bet.status} result={bet.result} />

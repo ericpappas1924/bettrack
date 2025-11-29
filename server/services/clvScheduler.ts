@@ -17,6 +17,17 @@ async function updateBetCLV(bet: any): Promise<{ updated: boolean; error?: strin
       return { updated: false };
     }
 
+    // Skip player props - they require different markets we don't support yet
+    if (bet.betType === 'Player Prop') {
+      console.log(`  ⏭️  Bet ${bet.id.substring(0, 8)}... is player prop, skipping`);
+      const errorMsg = 'Player props not supported - requires player-specific markets';
+      await storage.updateBet(bet.id, {
+        clvFetchError: errorMsg,
+        clvLastAttempt: new Date(),
+      });
+      return { updated: false, error: errorMsg };
+    }
+
     // Validate game field
     const isValidGame = bet.game && 
                         bet.game.includes(' vs ') && 

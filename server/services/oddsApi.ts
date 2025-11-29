@@ -290,6 +290,13 @@ export async function findClosingOdds(
 
   try {
     console.log(`\n🔍 Finding current odds for: ${matchup} (${sport})`);
+    
+    // Skip player props - they need different markets that we don't support yet
+    if (team && (team.includes('Over') || team.includes('Under') || team.includes('Yards') || team.includes('Points') || team.includes('Receptions'))) {
+      console.log(`⚠️  Player prop detected - skipping (player prop markets not supported)`);
+      return null;
+    }
+    
     const games = await fetchGamesForSport(sportKey);
     
     // Find matching game

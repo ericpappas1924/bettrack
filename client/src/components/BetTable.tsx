@@ -7,10 +7,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
 import { Badge } from "@/components/ui/badge";
+import { RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import {
   americanToImpliedProbability,
@@ -39,9 +41,11 @@ interface BetTableProps {
   bets: Bet[];
   liveStats?: LiveStat[];
   onRowClick?: (bet: Bet) => void;
+  onFetchCLV?: (betId: string) => void;
+  fetchingCLV?: Set<string>;
 }
 
-export function BetTable({ bets, liveStats = [], onRowClick }: BetTableProps) {
+export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchingCLV = new Set() }: BetTableProps) {
   const getLiveStatForBet = (betId: string) => {
     return liveStats.find(stat => stat.betId === betId);
   };
@@ -113,14 +117,33 @@ export function BetTable({ bets, liveStats = [], onRowClick }: BetTableProps) {
                     <p className="text-xs text-muted-foreground">{bet.betType}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-bold tabular-nums">
-                      {formatOdds(bet.openingOdds)}
-                    </p>
-                    {bet.liveOdds && bet.status === "active" && (
-                      <p className="text-xs text-muted-foreground">
-                        Live: {formatOdds(bet.liveOdds)}
-                      </p>
-                    )}
+                    <div className="flex items-center gap-1">
+                      <div>
+                        <p className="text-lg font-bold tabular-nums">
+                          {formatOdds(bet.openingOdds)}
+                        </p>
+                        {bet.liveOdds && bet.status === "active" && (
+                          <p className="text-xs text-muted-foreground">
+                            Live: {formatOdds(bet.liveOdds)}
+                          </p>
+                        )}
+                      </div>
+                      {bet.status === "active" && !bet.clv && onFetchCLV && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onFetchCLV(bet.id);
+                          }}
+                          disabled={fetchingCLV.has(bet.id)}
+                          title="Fetch current CLV"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -214,6 +237,7 @@ export function BetTable({ bets, liveStats = [], onRowClick }: BetTableProps) {
               <TableHead className="w-28 text-right">Est. W/L</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-24 text-right">P/L</TableHead>
+              <TableHead className="w-16"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -302,6 +326,23 @@ export function BetTable({ bets, liveStats = [], onRowClick }: BetTableProps) {
                     data-testid={`text-profit-${bet.id}`}
                   >
                     {formatCurrency(bet.profit)}
+                  </TableCell>
+                  <TableCell>
+                    {bet.status === "active" && !bet.clv && onFetchCLV && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onFetchCLV(bet.id);
+                        }}
+                        disabled={fetchingCLV.has(bet.id)}
+                        title="Fetch current CLV"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );

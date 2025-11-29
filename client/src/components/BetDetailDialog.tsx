@@ -194,15 +194,15 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <DialogTitle className="text-2xl">{bet.team}</DialogTitle>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-muted-foreground">{bet.betType}</span>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col gap-0 p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
+          <div className="flex items-start justify-between gap-4 pr-8">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-2xl truncate">{bet.team}</DialogTitle>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-sm text-muted-foreground">{bet.betType}</span>
                 {bet.isFreePlay && (
-                  <Badge className="bg-green-600 text-white">FREE PLAY</Badge>
+                  <Badge className="bg-green-600 text-white text-xs">FREE PLAY</Badge>
                 )}
               </div>
             </div>
@@ -210,7 +210,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
           </div>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="space-y-4 px-6 overflow-y-auto flex-1">
           {bet.status === "active" && (
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
@@ -481,7 +481,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
           )}
         </div>
 
-        <DialogFooter className="mt-6 gap-2 flex-col sm:flex-row">
+        <DialogFooter className="px-6 py-4 gap-2 flex-col sm:flex-row shrink-0 border-t bg-background">
           {onDelete && (
             <Button
               variant="outline"

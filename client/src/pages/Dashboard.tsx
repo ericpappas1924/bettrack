@@ -38,6 +38,7 @@ export default function Dashboard() {
   const [sport, setSport] = useState("all");
   const [status, setStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [fetchingCLV, setFetchingCLV] = useState<Set<string>>(new Set());
 
   const { data: bets = [], isLoading } = useQuery<Bet[]>({
     queryKey: ["/api/bets"],
@@ -138,6 +139,37 @@ export default function Dashboard() {
     },
   });
 
+  const fetchCLVMutation = useMutation({
+    mutationFn: async (betId: string) => {
+      const res = await apiRequest("POST", `/api/bets/${betId}/auto-fetch-clv`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "CLV fetched",
+        description: `CLV: ${data.clv}%, EV: $${data.expectedValue}`,
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      const errorMessage = error.message || '';
+      let description = "Could not find closing odds. Please enter manually.";
+      
+      if (errorMessage.includes("legacy bet") || errorMessage.includes("Invalid game matchup")) {
+        description = "This is an older bet without matchup info. Please enter closing odds manually.";
+      } else if (errorMessage.includes("Could not find current odds")) {
+        description = "Unable to fetch odds for this bet. Please enter manually.";
+      }
+      
+      toast({ title: "Auto-fetch failed", description, variant: "destructive" });
+    },
+  });
+
   const filteredBets = bets.filter((bet) => {
     const matchesSport = sport === "all" || bet.sport === sport;
     const matchesStatus = status === "all" || bet.status === status;
@@ -183,6 +215,19 @@ export default function Dashboard() {
     const liveProbability = americanToImpliedProbability(liveOdds);
     return sum + calculateExpectedValue(stake, liveOdds, liveProbability);
   }, 0);
+
+  const handleFetchCLV = (betId: string) => {
+    setFetchingCLV(prev => new Set(prev).add(betId));
+    fetchCLVMutation.mutate(betId, {
+      onSettled: () => {
+        setFetchingCLV(prev => {
+          const next = new Set(prev);
+          next.delete(betId);
+          return next;
+        });
+      },
+    });
+  };
 
   const handleAddBet = async (data: any) => {
     try {
@@ -422,6 +467,8 @@ export default function Dashboard() {
                 bets={filteredBets}
                 liveStats={liveStats}
                 onRowClick={(bet) => setDetailBet(bet as Bet)}
+                onFetchCLV={handleFetchCLV}
+                fetchingCLV={fetchingCLV}
               />
             )}
           </div>

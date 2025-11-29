@@ -17,6 +17,7 @@ export interface ParsedBet {
   category?: BetCategory;
   gameId?: string;
   league?: string;
+  gameStartTime?: Date | null;
   parseWarnings?: string[];
 }
 
@@ -126,7 +127,7 @@ function extractLiveBetDetails(block: string): {
   return { game, description, sport, gameId, league, odds };
 }
 
-function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport } {
+function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport; gameStartTime: Date | null } {
   const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+?)(?=\s*\n|Pending|$)/s);
   if (straightMatch) {
     const gameDate = straightMatch[1];
@@ -141,10 +142,29 @@ function extractStraightBetDetails(block: string): { game: string; description: 
     const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
     const game = teamMatch ? teamMatch[1].trim() : betDetails;
     
-    return { game, description: betDetails, sport };
+    // Parse game start time if available (format: Nov-29-2025 12:00 PM)
+    let gameStartTime: Date | null = null;
+    try {
+      const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+      if (dateTimeMatch) {
+        const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+        const months: { [key: string]: number } = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        let hour = parseInt(hours);
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        gameStartTime = new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes));
+      }
+    } catch (e) {
+      // If parsing fails, just leave as null
+    }
+    
+    return { game, description: betDetails, sport, gameStartTime };
   }
   
-  return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block) };
+  return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block), gameStartTime: null };
 }
 
 function extractPlayerPropDetails(block: string): { game: string; description: string } {
@@ -192,24 +212,48 @@ function extractPlayerPropDetails(block: string): { game: string; description: s
   return { game, description: description || game };
 }
 
-function extractParlayDetails(block: string): { legs: string[]; description: string } {
-  const legPattern = /\[[^\]]+\]\s*\[([^\]]+)\]\s*-\s*\[\d+\]\s*([^\[\n]+)/g;
+function extractParlayDetails(block: string): { legs: string[]; description: string; gameStartTime: Date | null } {
+  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[\d+\]\s*([^\[\n]+)/g;
   const legs: string[] = [];
+  const gameTimes: Date[] = [];
   let match;
   
   while ((match = legPattern.exec(block)) !== null) {
-    const sport = match[1];
-    let betDetail = match[2].trim();
+    const gameDate = match[1];
+    const sport = match[2];
+    let betDetail = match[3].trim();
     betDetail = betDetail.replace(/\s*\[Pending\]/, '').trim();
     legs.push(betDetail);
+    
+    // Try to parse the game time for this leg
+    try {
+      const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+      if (dateTimeMatch) {
+        const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+        const months: { [key: string]: number } = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        let hour = parseInt(hours);
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
+      }
+    } catch (e) {
+      // If parsing fails, skip this time
+    }
   }
   
   const parlayTeamMatch = block.match(/PARLAY\s*\((\d+)\s*TEAMS?\)/i);
   const teamCount = parlayTeamMatch ? parlayTeamMatch[1] : legs.length.toString();
   
+  // Use the earliest game time from all legs
+  const gameStartTime = gameTimes.length > 0 ? gameTimes.sort((a, b) => a.getTime() - b.getTime())[0] : null;
+  
   return {
     legs,
-    description: `${teamCount}-Team Parlay`
+    description: `${teamCount}-Team Parlay`,
+    gameStartTime
   };
 }
 
@@ -280,6 +324,7 @@ export function parseBetPaste(rawText: string): ParseResult {
       let sport = getSportFromText(block);
       let gameId: string | undefined;
       let league: string | undefined;
+      let gameStartTime: Date | null = null;
       
       // Handle live betting bets (especially esports)
       if (isLive) {
@@ -305,11 +350,13 @@ export function parseBetPaste(rawText: string): ParseResult {
         legs = parlayDetails.legs;
         description = parlayDetails.description;
         game = legs.join(' / ');
+        gameStartTime = parlayDetails.gameStartTime;
       } else {
         const straightDetails = extractStraightBetDetails(block);
         game = straightDetails.game;
         description = straightDetails.description;
         sport = straightDetails.sport;
+        gameStartTime = straightDetails.gameStartTime;
       }
       
       const statusText = block.toLowerCase();
@@ -358,6 +405,7 @@ export function parseBetPaste(rawText: string): ParseResult {
         category,
         gameId,
         league,
+        gameStartTime,
         parseWarnings: warnings.length > 0 ? warnings : undefined
       });
       
@@ -411,7 +459,7 @@ export function convertToAppBet(parsed: ParsedBet) {
     notes: notes || null,
     isFreePlay: parsed.isFreePlay,
     createdAt: parsed.date,
-    gameStartTime: null, // Game start time not available in paste format
+    gameStartTime: parsed.gameStartTime || null,
     settledAt: parsed.status !== 'pending' ? new Date() : null,
   };
 }

@@ -6,6 +6,7 @@ import { insertBetSchema, updateBetSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { trackMultipleBets, autoSettleCompletedBets } from "./services/liveStatTracker";
+import { batchFindGameStartTimes } from "./services/oddsApi";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -74,7 +75,38 @@ export async function registerRoutes(
   app.post("/api/bets/import", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const betsWithUser = req.body.map((bet: any) => ({ ...bet, userId }));
+      let betsWithUser = req.body.map((bet: any) => ({ ...bet, userId }));
+      
+      // Enrich bets with game start times from Odds API
+      try {
+        const betsNeedingTimes = betsWithUser
+          .filter((bet: any) => !bet.gameStartTime && bet.game && bet.sport)
+          .map((bet: any) => ({ matchup: bet.game, sport: bet.sport }));
+        
+        if (betsNeedingTimes.length > 0) {
+          console.log(`Fetching game times for ${betsNeedingTimes.length} bets...`);
+          const gameTimesMap = await batchFindGameStartTimes(betsNeedingTimes);
+          
+          // Update bets with found game times
+          betsWithUser = betsWithUser.map((bet: any) => {
+            if (!bet.gameStartTime && bet.game && bet.sport) {
+              const key = `${bet.sport}:${bet.game}`;
+              const gameTime = gameTimesMap.get(key);
+              if (gameTime) {
+                return { ...bet, gameStartTime: gameTime };
+              }
+            }
+            return bet;
+          });
+          
+          const enrichedCount = betsWithUser.filter((bet: any) => bet.gameStartTime).length;
+          console.log(`Enriched ${enrichedCount} bets with game times`);
+        }
+      } catch (enrichError) {
+        console.error("Error enriching with game times:", enrichError);
+        // Continue with import even if enrichment fails
+      }
+      
       const betsArray = z.array(insertBetSchema).parse(betsWithUser);
       const createdBets = await storage.createBets(betsArray);
       res.status(201).json(createdBets);

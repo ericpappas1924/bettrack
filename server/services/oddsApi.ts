@@ -14,6 +14,26 @@ const SPORT_MAP: Record<string, string> = {
   'MLS': 'soccer_usa_mls',
 };
 
+// Map stat types to Odds API player prop markets
+const PLAYER_PROP_MARKETS: Record<string, string> = {
+  'passing yards': 'player_pass_yds',
+  'rushing yards': 'player_rush_yds',
+  'receiving yards': 'player_reception_yds',
+  'receptions': 'player_receptions',
+  'pass tds': 'player_pass_tds',
+  'pass touchdowns': 'player_pass_tds',
+  'rush tds': 'player_rush_tds',
+  'rush touchdowns': 'player_rush_tds',
+  'receiving tds': 'player_reception_tds',
+  'receiving touchdowns': 'player_reception_tds',
+  'anytime td': 'player_anytime_td',
+  'points': 'player_points',
+  'assists': 'player_assists',
+  'rebounds': 'player_rebounds',
+  'threes': 'player_threes',
+  '3-point field goals': 'player_threes',
+};
+
 export interface OddsGame {
   id: string;
   sport_key: string;
@@ -29,6 +49,8 @@ export interface OddsGame {
       outcomes: Array<{
         name: string;
         price: number;
+        description?: string;  // For player props
+        point?: number;        // For player prop lines
       }>;
     }>;
   }>;
@@ -112,6 +134,50 @@ const fetchGamesForSport = memoize(
   },
   { maxAge: 5 * 60 * 1000, promise: true } // Cache for 5 minutes
 );
+
+/**
+ * Parse player prop details from bet description
+ * Examples:
+ * - "Virginia Tech vs Virginia J'mari Taylor Over 88.5 Rushing Yards"
+ * - "George Kittle (SF) Under 5.5 Receptions"
+ * - "Patrick Mahomes Over 250.5 Passing Yards"
+ */
+function parsePlayerProp(description: string): {
+  playerName: string;
+  statType: string;
+  line: number;
+  isOver: boolean;
+} | null {
+  // Pattern: Player Name (optional team) Over/Under Line Stat Type
+  const pattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\-]+?)$/i;
+  const match = description.match(pattern);
+  
+  if (!match) {
+    console.log(`  ⚠️  Could not parse player prop: "${description}"`);
+    return null;
+  }
+  
+  const playerName = match[1].trim();
+  const isOver = match[2].toLowerCase() === 'over';
+  const line = parseFloat(match[3]);
+  const statType = match[4].trim().toLowerCase();
+  
+  console.log(`  📋 Parsed prop: ${playerName} ${isOver ? 'Over' : 'Under'} ${line} ${statType}`);
+  
+  return { playerName, statType, line, isOver };
+}
+
+/**
+ * Normalize player name for matching
+ * Removes common suffixes and converts to lowercase
+ */
+function normalizePlayerName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s+(jr|sr|ii|iii|iv)\.?$/gi, '')
+    .replace(/['']/g, '')
+    .trim();
+}
 
 /**
  * Normalize team name for matching
@@ -267,12 +333,85 @@ export async function batchFindGameStartTimes(
 }
 
 /**
+ * Fetch player prop odds for a specific event and player
+ */
+async function findPlayerPropOdds(
+  sportKey: string,
+  eventId: string,
+  marketKey: string,
+  propDetails: { playerName: string; line: number; isOver: boolean }
+): Promise<number | null> {
+  if (!ODDS_API_KEY) {
+    console.warn('⚠️  ODDS_API_KEY not set');
+    return null;
+  }
+
+  try {
+    const url = `${ODDS_API_BASE}/sports/${sportKey}/events/${eventId}/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=${marketKey}&oddsFormat=american`;
+    console.log(`  🔗 Fetching player props: ${url.replace(ODDS_API_KEY, '[API_KEY]')}`);
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.error(`❌ Player prop API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log(`  ✅ Received player prop data`);
+
+    if (!data.bookmakers || data.bookmakers.length === 0) {
+      console.log(`  ⚠️  No bookmakers with player props available`);
+      return null;
+    }
+
+    console.log(`  📊 Bookmakers with ${marketKey}: ${data.bookmakers.length}`);
+
+    const normalizedPlayerName = normalizePlayerName(propDetails.playerName);
+    console.log(`  🔍 Looking for player: "${propDetails.playerName}" (normalized: "${normalizedPlayerName}")`);
+
+    // Search through bookmakers for matching player
+    for (const bookmaker of data.bookmakers) {
+      const market = bookmaker.markets?.find((m: any) => m.key === marketKey);
+      if (!market) continue;
+
+      console.log(`\n  📊 ${bookmaker.title} - ${market.outcomes?.length || 0} props`);
+
+      for (const outcome of market.outcomes || []) {
+        const outcomePlayerName = outcome.description || outcome.name;
+        const normalizedOutcomeName = normalizePlayerName(outcomePlayerName);
+        
+        // Check if player matches and line matches
+        const playerMatches = normalizedOutcomeName.includes(normalizedPlayerName) || 
+                            normalizedPlayerName.includes(normalizedOutcomeName);
+        const lineMatches = outcome.point && Math.abs(outcome.point - propDetails.line) < 0.1;
+
+        if (playerMatches && lineMatches) {
+          // Check if it's Over or Under
+          const isOverOutcome = outcome.name.toLowerCase().includes('over');
+          if (isOverOutcome === propDetails.isOver) {
+            console.log(`  ✅ MATCH! Player: ${outcomePlayerName}, Line: ${outcome.point}, ${propDetails.isOver ? 'Over' : 'Under'}, Odds: ${outcome.price}`);
+            return outcome.price;
+          }
+        }
+      }
+    }
+
+    console.log(`  ❌ No matching player prop found`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error fetching player prop odds:`, error);
+    return null;
+  }
+}
+
+/**
  * Find closing odds for a bet
  * For games that have started/finished, current odds are the "closing" odds
  * @param matchup - Game matchup string
  * @param sport - Sport code
  * @param betType - Type of bet (e.g., "h2h" for moneyline, "spreads", "totals")
- * @param team - Team name to find odds for
+ * @param team - Team name to find odds for (can be player prop description)
  * @returns Closing odds in American format or null if not found
  */
 export async function findClosingOdds(
@@ -291,12 +430,38 @@ export async function findClosingOdds(
   try {
     console.log(`\n🔍 Finding current odds for: ${matchup} (${sport})`);
     
-    // Skip player props - they need different markets that we don't support yet
-    if (team && (team.includes('Over') || team.includes('Under') || team.includes('Yards') || team.includes('Points') || team.includes('Receptions'))) {
-      console.log(`⚠️  Player prop detected - skipping (player prop markets not supported)`);
-      return null;
+    // Check if this is a player prop
+    const propDetails = team ? parsePlayerProp(team) : null;
+    
+    if (propDetails) {
+      console.log(`  🎯 Detected player prop bet`);
+      
+      // Find the game first
+      const games = await fetchGamesForSport(sportKey);
+      const matchingGame = games.find(game => matchesGame(game, matchup));
+      
+      if (!matchingGame) {
+        console.log(`❌ No matching game found for: ${matchup} in ${sport}`);
+        return null;
+      }
+      
+      console.log(`✅ Found matching game: ${matchingGame.home_team} vs ${matchingGame.away_team}`);
+      
+      // Map stat type to API market
+      const marketKey = PLAYER_PROP_MARKETS[propDetails.statType];
+      if (!marketKey) {
+        console.log(`❌ Unsupported stat type: ${propDetails.statType}`);
+        console.log(`   Supported types: ${Object.keys(PLAYER_PROP_MARKETS).join(', ')}`);
+        return null;
+      }
+      
+      console.log(`  📋 Looking for market: ${marketKey}`);
+      
+      // Fetch player props for this specific event
+      return await findPlayerPropOdds(sportKey, matchingGame.id, marketKey, propDetails);
     }
     
+    // Regular team bet (moneyline, spread, etc.)
     const games = await fetchGamesForSport(sportKey);
     
     // Find matching game

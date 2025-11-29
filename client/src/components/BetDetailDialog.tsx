@@ -129,9 +129,16 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
       setEditingClosingOdds(false);
       setClosingOddsInput("");
     } catch (error) {
+      const errorMessage = (error as Error).message || '';
+      let description = errorMessage;
+      
+      if (errorMessage.includes("401")) {
+        description = "Session expired. Please refresh the page and try again.";
+      }
+      
       toast({
         title: "Failed to calculate CLV",
-        description: (error as Error).message,
+        description,
         variant: "destructive",
       });
     } finally {
@@ -151,9 +158,16 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
         description: "Closing odds and CLV have been automatically updated",
       });
     } catch (error) {
+      const errorMessage = (error as Error).message || '';
+      let description = "Could not find closing odds. Please enter manually.";
+      
+      if (errorMessage.includes("401")) {
+        description = "Session expired. Please refresh the page and try again.";
+      }
+      
       toast({
         title: "Auto-fetch failed",
-        description: "Could not find closing odds. Please enter manually.",
+        description,
         variant: "destructive",
       });
     } finally {

@@ -369,6 +369,9 @@ async function findPlayerPropOdds(
 
     const normalizedPlayerName = normalizePlayerName(propDetails.playerName);
     console.log(`  🔍 Looking for player: "${propDetails.playerName}" (normalized: "${normalizedPlayerName}")`);
+    console.log(`  📏 Target line: ${propDetails.line} (${propDetails.isOver ? 'Over' : 'Under'})`);
+
+    let closestMatch: { outcome: any; bookmakerTitle: string; lineDiff: number } | null = null;
 
     // Search through bookmakers for matching player
     for (const bookmaker of data.bookmakers) {
@@ -381,23 +384,44 @@ async function findPlayerPropOdds(
         const outcomePlayerName = outcome.description || outcome.name;
         const normalizedOutcomeName = normalizePlayerName(outcomePlayerName);
         
-        // Check if player matches and line matches
+        // Check if player matches
         const playerMatches = normalizedOutcomeName.includes(normalizedPlayerName) || 
                             normalizedPlayerName.includes(normalizedOutcomeName);
-        const lineMatches = outcome.point && Math.abs(outcome.point - propDetails.line) < 0.1;
 
-        if (playerMatches && lineMatches) {
+        if (playerMatches && outcome.point) {
           // Check if it's Over or Under
           const isOverOutcome = outcome.name.toLowerCase().includes('over');
+          
           if (isOverOutcome === propDetails.isOver) {
-            console.log(`  ✅ MATCH! Player: ${outcomePlayerName}, Line: ${outcome.point}, ${propDetails.isOver ? 'Over' : 'Under'}, Odds: ${outcome.price}`);
-            return outcome.price;
+            const lineDiff = Math.abs(outcome.point - propDetails.line);
+            
+            // Exact match (within 0.1)
+            if (lineDiff < 0.1) {
+              console.log(`  ✅ EXACT MATCH! Player: ${outcomePlayerName}, Line: ${outcome.point}, ${propDetails.isOver ? 'Over' : 'Under'}, Odds: ${outcome.price}`);
+              return outcome.price;
+            }
+            
+            // Track closest match as fallback
+            if (!closestMatch || lineDiff < closestMatch.lineDiff) {
+              closestMatch = { outcome, bookmakerTitle: bookmaker.title, lineDiff };
+              console.log(`     Found line: ${outcome.point} (${propDetails.isOver ? 'Over' : 'Under'}) @ ${outcome.price} - diff: ${lineDiff.toFixed(1)}`);
+            }
           }
         }
       }
     }
 
-    console.log(`  ❌ No matching player prop found`);
+    // If no exact match, use closest line within 10 points
+    if (closestMatch && closestMatch.lineDiff <= 10) {
+      console.log(`\n  ⚠️  No exact line match found. Using closest available line:`);
+      console.log(`     Original bet: ${propDetails.line} ${propDetails.isOver ? 'Over' : 'Under'}`);
+      console.log(`     Closest line: ${closestMatch.outcome.point} ${propDetails.isOver ? 'Over' : 'Under'} (${closestMatch.bookmakerTitle})`);
+      console.log(`     Difference: ${closestMatch.lineDiff.toFixed(1)} ${propDetails.line > closestMatch.outcome.point ? '(line moved down)' : '(line moved up)'}`);
+      console.log(`  ✅ Using odds: ${closestMatch.outcome.price}`);
+      return closestMatch.outcome.price;
+    }
+
+    console.log(`  ❌ No matching player prop found (no lines within 10 points of ${propDetails.line})`);
     return null;
   } catch (error) {
     console.error(`❌ Error fetching player prop odds:`, error);

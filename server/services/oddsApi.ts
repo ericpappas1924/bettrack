@@ -35,8 +35,23 @@ export interface OddsGame {
 }
 
 /**
- * Fetch upcoming games for a specific sport
- * Cached for 5 minutes to reduce API calls
+ * Fetch upcoming games for a specific sport from The Odds API
+ * 
+ * API Documentation: https://the-odds-api.com/liveapi/guides/v4/
+ * Endpoint: GET /v4/sports/{sport_key}/odds
+ * 
+ * Parameters:
+ * - apiKey: Your API key from the-odds-api.com
+ * - regions: us (US bookmakers), uk (UK bookmakers), eu (European bookmakers)
+ * - markets: h2h (moneyline), spreads, totals
+ * - oddsFormat: american (e.g. +150, -110) or decimal (e.g. 2.50)
+ * 
+ * Response includes:
+ * - Game details (teams, commence time)
+ * - Bookmakers array with markets and outcomes
+ * - Each outcome has name (team) and price (odds)
+ * 
+ * Cached for 5 minutes to reduce API calls and usage
  */
 const fetchGamesForSport = memoize(
   async (sportKey: string): Promise<OddsGame[]> => {
@@ -49,6 +64,7 @@ const fetchGamesForSport = memoize(
     }
 
     try {
+      // The Odds API v4 endpoint for odds data
       const url = `${ODDS_API_BASE}/sports/${sportKey}/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american`;
       console.log(`   API URL: ${url.replace(ODDS_API_KEY!, '[API_KEY]')}`);
       
@@ -67,8 +83,26 @@ const fetchGamesForSport = memoize(
         console.log(`   Sample game:`, {
           home: data[0].home_team,
           away: data[0].away_team,
-          commence_time: data[0].commence_time
+          commence_time: data[0].commence_time,
+          bookmakers_count: data[0].bookmakers?.length || 0
         });
+        
+        // Log detailed structure of first game to verify response format
+        if (data[0].bookmakers && data[0].bookmakers.length > 0) {
+          const firstBookmaker = data[0].bookmakers[0];
+          console.log(`   Sample bookmaker structure:`, {
+            title: firstBookmaker.title,
+            key: firstBookmaker.key,
+            markets_count: firstBookmaker.markets?.length || 0
+          });
+          
+          if (firstBookmaker.markets && firstBookmaker.markets.length > 0) {
+            const h2hMarket = firstBookmaker.markets.find(m => m.key === 'h2h');
+            if (h2hMarket) {
+              console.log(`   H2H Market outcomes:`, h2hMarket.outcomes);
+            }
+          }
+        }
       }
       return data as OddsGame[];
     } catch (error) {
@@ -276,24 +310,40 @@ export async function findClosingOdds(
 
     console.log(`📊 Bookmakers available: ${matchingGame.bookmakers.length}`);
     
+    // Log all available bookmakers for transparency
+    console.log(`   Available bookmakers: ${matchingGame.bookmakers.map(b => b.title).join(', ')}`);
+    
     // Try to find h2h (moneyline) market
     for (const bookmaker of matchingGame.bookmakers) {
       const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
-      if (!h2hMarket || !h2hMarket.outcomes) continue;
+      if (!h2hMarket || !h2hMarket.outcomes) {
+        console.log(`   ⚠️  ${bookmaker.title}: No h2h market found`);
+        continue;
+      }
       
-      console.log(`   Bookmaker: ${bookmaker.title}`);
+      console.log(`\n   📊 ${bookmaker.title} h2h market:`);
+      console.log(`      Outcomes available: ${h2hMarket.outcomes.length}`);
+      h2hMarket.outcomes.forEach(o => {
+        console.log(`      - ${o.name}: ${o.price}`);
+      });
       
       // If team is specified, find odds for that team
       if (team) {
         const normalizedTeam = normalizeTeamName(team);
-        const outcome = h2hMarket.outcomes.find(o => 
-          normalizeTeamName(o.name).includes(normalizedTeam) || 
-          normalizedTeam.includes(normalizeTeamName(o.name))
-        );
+        console.log(`\n      🔍 Looking for team: "${team}" (normalized: "${normalizedTeam}")`);
+        
+        const outcome = h2hMarket.outcomes.find(o => {
+          const normalizedOutcomeName = normalizeTeamName(o.name);
+          console.log(`         Checking: "${o.name}" (normalized: "${normalizedOutcomeName}")`);
+          return normalizedOutcomeName.includes(normalizedTeam) || 
+                 normalizedTeam.includes(normalizedOutcomeName);
+        });
         
         if (outcome) {
-          console.log(`✅ Found odds for ${team}: ${outcome.price}`);
+          console.log(`\n✅ MATCH FOUND! Team: ${outcome.name}, Odds: ${outcome.price}`);
           return outcome.price;
+        } else {
+          console.log(`      ❌ No match found in this bookmaker`);
         }
       } else {
         // No team specified, return first available odds

@@ -126,24 +126,65 @@ export async function registerRoutes(
         // Continue with import even if enrichment fails
       }
       
-      console.log(`\n💾 Saving ${betsWithUser.length} bets to database...`);
-      console.log(`Sample bet being saved:`, JSON.stringify(betsWithUser[0], null, 2));
+      console.log(`\n💾 Validating ${betsWithUser.length} bets...`);
       
-      // Convert ISO date strings to Date objects for Zod validation
-      const betsWithDates = betsWithUser.map((bet: any) => ({
-        ...bet,
-        gameStartTime: bet.gameStartTime ? new Date(bet.gameStartTime) : null,
-        settledAt: bet.settledAt ? new Date(bet.settledAt) : null,
-        createdAt: bet.createdAt ? new Date(bet.createdAt) : undefined,
-      }));
+      // Convert ISO date strings to Date objects and validate individually
+      const validBets: any[] = [];
+      const failedBets: Array<{ bet: any; error: string }> = [];
       
-      const betsArray = z.array(insertBetSchema).parse(betsWithDates);
-      const createdBets = await storage.createBets(betsArray);
+      for (let i = 0; i < betsWithUser.length; i++) {
+        try {
+          const betWithDates = {
+            ...betsWithUser[i],
+            gameStartTime: betsWithUser[i].gameStartTime ? new Date(betsWithUser[i].gameStartTime) : null,
+            settledAt: betsWithUser[i].settledAt ? new Date(betsWithUser[i].settledAt) : null,
+            createdAt: betsWithUser[i].createdAt ? new Date(betsWithUser[i].createdAt) : undefined,
+          };
+          
+          const validated = insertBetSchema.parse(betWithDates);
+          validBets.push(validated);
+        } catch (error) {
+          const errorMessage = error instanceof z.ZodError 
+            ? error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+            : 'Unknown validation error';
+          
+          failedBets.push({
+            bet: betsWithUser[i],
+            error: errorMessage
+          });
+          
+          console.log(`❌ Bet ${i + 1} failed validation: ${errorMessage}`);
+        }
+      }
+      
+      console.log(`\n📊 VALIDATION SUMMARY:`);
+      console.log(`   Valid: ${validBets.length} bets`);
+      console.log(`   Failed: ${failedBets.length} bets`);
+      
+      if (validBets.length === 0) {
+        return res.status(400).json({ 
+          error: "All bets failed validation",
+          failures: failedBets.map(f => ({ game: f.bet.game, error: f.error }))
+        });
+      }
+      
+      console.log(`\n💾 Saving ${validBets.length} valid bets to database...`);
+      const createdBets = await storage.createBets(validBets);
       
       console.log(`\n✅ Successfully imported ${createdBets.length} bets`);
+      if (failedBets.length > 0) {
+        console.log(`⚠️  ${failedBets.length} bets failed and were skipped`);
+      }
       console.log(`========== IMPORT COMPLETE ==========\n`);
       
-      res.status(201).json(createdBets);
+      // Return both successes and failures
+      res.status(201).json({
+        imported: createdBets,
+        failed: failedBets.length > 0 ? failedBets.map(f => ({ 
+          game: f.bet.game || f.bet.team, 
+          error: f.error 
+        })) : undefined
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);

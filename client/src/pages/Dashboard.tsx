@@ -69,10 +69,26 @@ export default function Dashboard() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
-      toast({
-        title: "Bets imported",
-        description: `Successfully imported ${data.length} bets`,
-      });
+      
+      // Handle new response format with both imported and failed bets
+      const imported = data.imported || data;
+      const failed = data.failed || [];
+      
+      if (failed.length > 0) {
+        // Partial success
+        toast({
+          title: "Partial import success",
+          description: `Imported ${imported.length} bets. ${failed.length} failed validation.`,
+          variant: "default",
+        });
+        console.warn('Failed bets:', failed);
+      } else {
+        // Full success
+        toast({
+          title: "Bets imported",
+          description: `Successfully imported ${imported.length} bets`,
+        });
+      }
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {

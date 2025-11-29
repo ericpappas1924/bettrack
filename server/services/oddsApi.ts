@@ -29,24 +29,39 @@ export interface OddsGame {
  */
 const fetchGamesForSport = memoize(
   async (sportKey: string): Promise<OddsGame[]> => {
+    console.log(`\n🔍 Fetching games for sport: ${sportKey}`);
+    
     if (!ODDS_API_KEY) {
-      console.warn('ODDS_API_KEY not set, skipping game time fetch');
+      console.warn('⚠️  ODDS_API_KEY not set, skipping game time fetch');
+      console.warn('   Set ODDS_API_KEY in Replit Secrets to enable automatic game times');
       return [];
     }
 
     try {
       const url = `${ODDS_API_BASE}/sports/${sportKey}/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=h2h&oddsFormat=american`;
+      console.log(`   API URL: ${url.replace(ODDS_API_KEY!, '[API_KEY]')}`);
+      
       const response = await fetch(url);
       
       if (!response.ok) {
-        console.error(`Odds API error for ${sportKey}:`, response.status, response.statusText);
+        console.error(`❌ Odds API error for ${sportKey}:`, response.status, response.statusText);
+        const errorText = await response.text();
+        console.error(`   Response: ${errorText}`);
         return [];
       }
 
       const data = await response.json();
+      console.log(`✅ Received ${data.length} games for ${sportKey}`);
+      if (data.length > 0) {
+        console.log(`   Sample game:`, {
+          home: data[0].home_team,
+          away: data[0].away_team,
+          commence_time: data[0].commence_time
+        });
+      }
       return data as OddsGame[];
     } catch (error) {
-      console.error(`Error fetching odds for ${sportKey}:`, error);
+      console.error(`❌ Error fetching odds for ${sportKey}:`, error);
       return [];
     }
   },
@@ -122,6 +137,8 @@ export async function findGameStartTime(matchup: string, sport: string): Promise
 export async function batchFindGameStartTimes(
   bets: Array<{ matchup: string; sport: string }>
 ): Promise<Map<string, Date | null>> {
+  console.log(`\n📦 Batch fetching game times for ${bets.length} bets`);
+  
   const results = new Map<string, Date | null>();
   
   // Group bets by sport
@@ -135,27 +152,58 @@ export async function batchFindGameStartTimes(
     betsBySport.get(bet.sport)!.push({ matchup: bet.matchup, key });
   }
   
+  console.log(`   Grouped into ${betsBySport.size} sports:`, Array.from(betsBySport.keys()));
+  
   // Fetch games for each sport
   for (const [sport, sportBets] of betsBySport.entries()) {
     const sportKey = SPORT_MAP[sport];
-    if (!sportKey) continue;
+    console.log(`\n🏈 Processing ${sport} (${sportBets.length} bets)`);
+    
+    if (!sportKey) {
+      console.warn(`   ⚠️  No Odds API mapping for sport: ${sport}`);
+      for (const { key } of sportBets) {
+        results.set(key, null);
+      }
+      continue;
+    }
+    
+    console.log(`   Mapped to Odds API sport: ${sportKey}`);
     
     try {
       const games = await fetchGamesForSport(sportKey);
+      console.log(`   Found ${games.length} games from API`);
       
       // Match each bet to a game
       for (const { matchup, key } of sportBets) {
-        const matchingGame = games.find(game => matchesGame(game, matchup));
-        results.set(key, matchingGame ? new Date(matchingGame.commence_time) : null);
+        console.log(`\n   🔍 Matching: "${matchup}"`);
+        const matchingGame = games.find(game => {
+          const matches = matchesGame(game, matchup);
+          if (matches) {
+            console.log(`      ✅ MATCHED: ${game.away_team} @ ${game.home_team}`);
+            console.log(`         Game time: ${game.commence_time}`);
+          }
+          return matches;
+        });
+        
+        if (matchingGame) {
+          results.set(key, new Date(matchingGame.commence_time));
+        } else {
+          console.log(`      ❌ No match found`);
+          console.log(`         Available games:`, games.slice(0, 3).map(g => `${g.away_team} @ ${g.home_team}`));
+          results.set(key, null);
+        }
       }
     } catch (error) {
-      console.error(`Error batch fetching for ${sport}:`, error);
+      console.error(`❌ Error batch fetching for ${sport}:`, error);
       // Set all bets for this sport to null
       for (const { key } of sportBets) {
         results.set(key, null);
       }
     }
   }
+  
+  const successCount = Array.from(results.values()).filter(v => v !== null).length;
+  console.log(`\n📊 Batch fetch complete: ${successCount}/${bets.length} games matched`);
   
   return results;
 }

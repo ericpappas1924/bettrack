@@ -258,10 +258,14 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
 }
 
 export function parseBetPaste(rawText: string): ParseResult {
+  console.log('\n========== BET PARSER STARTED ==========');
+  console.log(`Raw text length: ${rawText.length} characters`);
+  
   const bets: ParsedBet[] = [];
   const errors: ParseResult['errors'] = [];
   
   const betBlocks = rawText.split(/\n(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}-\d{4}\s*\n)/);
+  console.log(`Split into ${betBlocks.length} bet blocks`);
   
   for (let blockIndex = 0; blockIndex < betBlocks.length; blockIndex++) {
     const block = betBlocks[blockIndex];
@@ -351,12 +355,18 @@ export function parseBetPaste(rawText: string): ParseResult {
         description = parlayDetails.description;
         game = legs.join(' / ');
         gameStartTime = parlayDetails.gameStartTime;
+        if (gameStartTime) {
+          console.log(`  ✓ Extracted game time from parlay: ${gameStartTime}`);
+        }
       } else {
         const straightDetails = extractStraightBetDetails(block);
         game = straightDetails.game;
         description = straightDetails.description;
         sport = straightDetails.sport;
         gameStartTime = straightDetails.gameStartTime;
+        if (gameStartTime) {
+          console.log(`  ✓ Extracted game time from straight bet: ${gameStartTime}`);
+        }
       }
       
       const statusText = block.toLowerCase();
@@ -419,6 +429,14 @@ export function parseBetPaste(rawText: string): ParseResult {
       console.warn('Failed to parse bet block:', block, e);
     }
   }
+  
+  const withTimes = bets.filter(b => b.gameStartTime).length;
+  console.log(`\n📊 PARSER SUMMARY:`);
+  console.log(`   Total parsed: ${bets.length} bets`);
+  console.log(`   With game times: ${withTimes}`);
+  console.log(`   Without game times: ${bets.length - withTimes}`);
+  console.log(`   Errors: ${errors.length}`);
+  console.log('========== BET PARSER COMPLETE ==========\n');
   
   return { bets, errors };
 }

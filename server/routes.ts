@@ -77,15 +77,27 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       let betsWithUser = req.body.map((bet: any) => ({ ...bet, userId }));
       
+      console.log(`\n========== IMPORT STARTED ==========`);
+      console.log(`Total bets to import: ${betsWithUser.length}`);
+      console.log(`Sample bet data:`, JSON.stringify(betsWithUser[0], null, 2));
+      
       // Enrich bets with game start times from Odds API
       try {
         const betsNeedingTimes = betsWithUser
           .filter((bet: any) => !bet.gameStartTime && bet.game && bet.sport)
           .map((bet: any) => ({ matchup: bet.game, sport: bet.sport }));
         
+        console.log(`\nBets needing game times: ${betsNeedingTimes.length}`);
+        console.log(`Bets already have gameStartTime: ${betsWithUser.filter((b: any) => b.gameStartTime).length}`);
+        
         if (betsNeedingTimes.length > 0) {
-          console.log(`Fetching game times for ${betsNeedingTimes.length} bets...`);
+          console.log(`\n📅 Fetching game times from Odds API...`);
+          console.log(`Sample bets needing times:`, betsNeedingTimes.slice(0, 3));
+          
           const gameTimesMap = await batchFindGameStartTimes(betsNeedingTimes);
+          
+          console.log(`\n✅ Received ${gameTimesMap.size} results from Odds API`);
+          console.log(`Game times map:`, Array.from(gameTimesMap.entries()).slice(0, 5));
           
           // Update bets with found game times
           betsWithUser = betsWithUser.map((bet: any) => {
@@ -93,29 +105,44 @@ export async function registerRoutes(
               const key = `${bet.sport}:${bet.game}`;
               const gameTime = gameTimesMap.get(key);
               if (gameTime) {
+                console.log(`✓ Found time for ${bet.game}: ${gameTime}`);
                 return { ...bet, gameStartTime: gameTime };
+              } else {
+                console.log(`✗ No time found for ${bet.game} (key: ${key})`);
               }
             }
             return bet;
           });
           
           const enrichedCount = betsWithUser.filter((bet: any) => bet.gameStartTime).length;
-          console.log(`Enriched ${enrichedCount} bets with game times`);
+          console.log(`\n📊 ENRICHMENT SUMMARY:`);
+          console.log(`   Enriched: ${enrichedCount} bets with game times`);
+          console.log(`   Missing: ${betsWithUser.length - enrichedCount} bets without times`);
+        } else {
+          console.log(`\n⚠️  No bets needed game time enrichment (all already have times or missing game/sport)`);
         }
       } catch (enrichError) {
-        console.error("Error enriching with game times:", enrichError);
+        console.error("\n❌ ERROR enriching with game times:", enrichError);
         // Continue with import even if enrichment fails
       }
       
+      console.log(`\n💾 Saving ${betsWithUser.length} bets to database...`);
+      console.log(`Sample bet being saved:`, JSON.stringify(betsWithUser[0], null, 2));
+      
       const betsArray = z.array(insertBetSchema).parse(betsWithUser);
       const createdBets = await storage.createBets(betsArray);
+      
+      console.log(`\n✅ Successfully imported ${createdBets.length} bets`);
+      console.log(`========== IMPORT COMPLETE ==========\n`);
+      
       res.status(201).json(createdBets);
     } catch (error) {
       if (error instanceof z.ZodError) {
         const validationError = fromZodError(error);
+        console.error("\n❌ VALIDATION ERROR:", validationError.message);
         return res.status(400).json({ error: validationError.message });
       }
-      console.error("Error importing bets:", error);
+      console.error("\n❌ ERROR importing bets:", error);
       res.status(500).json({ error: "Failed to import bets" });
     }
   });

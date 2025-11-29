@@ -168,6 +168,10 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
       
       if (errorMessage.includes("401")) {
         description = "Session expired. Please refresh the page and try again.";
+      } else if (errorMessage.includes("legacy bet") || errorMessage.includes("Invalid game matchup")) {
+        description = "This is an older bet without matchup info. Please enter closing odds manually.";
+      } else if (errorMessage.includes("Could not find current odds")) {
+        description = "Player props not yet supported for auto-fetch. Using any available game odds as fallback.";
       }
       
       toast({

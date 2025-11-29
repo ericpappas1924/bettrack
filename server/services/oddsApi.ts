@@ -355,7 +355,22 @@ export async function findClosingOdds(
       }
     }
     
-    console.log(`⚠️  Could not find matching odds`);
+    console.log(`⚠️  Could not find exact match for team/player`);
+    
+    // FALLBACK: If no exact match, return the first available moneyline odds
+    // This is useful for player props where we can't match the exact prop
+    console.log(`\n   🔄 FALLBACK: Using first available moneyline odds as estimate`);
+    
+    for (const bookmaker of matchingGame.bookmakers) {
+      const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+      if (h2hMarket && h2hMarket.outcomes && h2hMarket.outcomes.length > 0) {
+        const fallbackOdds = h2hMarket.outcomes[0].price;
+        console.log(`   ✅ Using ${bookmaker.title} ${h2hMarket.outcomes[0].name}: ${fallbackOdds} (ESTIMATED)`);
+        return fallbackOdds;
+      }
+    }
+    
+    console.log(`   ❌ No fallback odds available`);
     return null;
   } catch (error) {
     console.error('❌ Error finding closing odds:', error);

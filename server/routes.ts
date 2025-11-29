@@ -377,11 +377,18 @@ export async function registerRoutes(
       console.log(`Game Start Time: ${existingBet.gameStartTime}`);
       console.log(`Status: ${existingBet.status}`);
       
-      if (!existingBet.game) {
-        console.log(`⚠️  No game matchup - cannot fetch odds`);
+      // Check if game field is valid (not just an external ID)
+      const isValidGame = existingBet.game && 
+                          existingBet.game.includes(' vs ') && 
+                          existingBet.game.length > 10 &&
+                          !/^\d+$/.test(existingBet.game);  // Not just digits
+      
+      if (!isValidGame) {
+        console.log(`⚠️  Invalid game matchup: "${existingBet.game}"`);
+        console.log(`   This is likely an older bet - cannot fetch odds without valid matchup`);
         return res.status(400).json({ 
-          error: "Cannot fetch odds: No game matchup available",
-          suggestion: "Please enter closing odds manually"
+          error: "Cannot fetch odds: Invalid game matchup (legacy bet)",
+          suggestion: "Please enter closing odds manually. Newer bets will have proper matchup info."
         });
       }
       

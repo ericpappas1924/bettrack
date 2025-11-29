@@ -335,8 +335,9 @@ export async function registerRoutes(
         ? 100 / (closingOddsNum + 100) 
         : -closingOddsNum / (-closingOddsNum + 100);
       
-      // CLV = (opening prob - closing prob) / closing prob * 100
-      const clv = ((openingProb - closingProb) / closingProb) * 100;
+      // CLV = (closing prob - opening prob) / opening prob * 100
+      // Positive CLV means closing probability is higher (market moved toward your bet)
+      const clv = ((closingProb - openingProb) / openingProb) * 100;
       
       const bet = await storage.updateBet(req.params.id, {
         closingOdds,

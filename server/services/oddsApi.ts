@@ -379,8 +379,9 @@ export function calculateCLV(openingOdds: number, closingOdds: number): number {
     ? 100 / (closingOdds + 100) 
     : -closingOdds / (-closingOdds + 100);
   
-  // CLV is the difference in implied probability
-  // Positive CLV means you got better odds than closing
-  return ((openingProb - closingProb) / closingProb) * 100;
+  // CLV is the percentage difference in implied probability
+  // Positive CLV means closing probability is higher (market moved toward your bet)
+  // Example: -115 to -134 means prob went from 53.49% to 57.26% = +7.05% CLV
+  return ((closingProb - openingProb) / openingProb) * 100;
 }
 

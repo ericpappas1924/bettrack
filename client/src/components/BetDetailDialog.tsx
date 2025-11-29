@@ -150,12 +150,17 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
     setFetchingCLV(true);
     try {
       const res = await apiRequest("POST", `/api/bets/${bet.id}/auto-fetch-clv`, {});
-      await res.json();
+      const updatedBet = await res.json();
       
-      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      // Invalidate and refetch the bets list
+      await queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      
+      // Close and reopen the dialog to show fresh data
+      onOpenChange(false);
+      
       toast({
         title: "CLV fetched",
-        description: "Closing odds and CLV have been automatically updated",
+        description: `Closing odds: ${updatedBet.closingOdds}, CLV: ${updatedBet.clv}%`,
       });
     } catch (error) {
       const errorMessage = (error as Error).message || '';

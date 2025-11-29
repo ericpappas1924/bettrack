@@ -260,6 +260,28 @@ export default function Dashboard() {
     }
   };
 
+  const deleteBetMutation = useMutation({
+    mutationFn: async (betId: string) => {
+      await apiRequest("DELETE", `/api/bets/${betId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({ title: "Bet deleted", description: "The bet has been removed" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleDeleteBet = (betId: string) => {
+    deleteBetMutation.mutate(betId);
+  };
+
   const getUserInitials = () => {
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
@@ -436,6 +458,7 @@ export default function Dashboard() {
         onOpenChange={(open) => !open && setDetailBet(null)}
         onUpdateLiveOdds={handleUpdateLiveOdds}
         onSettle={handleSettleBet}
+        onDelete={handleDeleteBet}
       />
     </div>
   );

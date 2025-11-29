@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator } from "lucide-react";
+import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator, RefreshCw, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -52,15 +52,17 @@ interface BetDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   onUpdateLiveOdds?: (betId: string, liveOdds: string) => void;
   onSettle?: (result: "won" | "lost" | "push") => void;
+  onDelete?: (betId: string) => void;
 }
 
-export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle }: BetDetailDialogProps) {
+export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle, onDelete }: BetDetailDialogProps) {
   const { toast } = useToast();
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
   const [editingClosingOdds, setEditingClosingOdds] = useState(false);
   const [closingOddsInput, setClosingOddsInput] = useState("");
   const [calculating, setCalculating] = useState(false);
+  const [fetchingCLV, setFetchingCLV] = useState(false);
 
   if (!bet) return null;
 
@@ -134,6 +136,35 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
       });
     } finally {
       setCalculating(false);
+    }
+  };
+
+  const handleAutoFetchCLV = async () => {
+    setFetchingCLV(true);
+    try {
+      const res = await apiRequest("POST", `/api/bets/${bet.id}/auto-fetch-clv`, {});
+      await res.json();
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "CLV fetched",
+        description: "Closing odds and CLV have been automatically updated",
+      });
+    } catch (error) {
+      toast({
+        title: "Auto-fetch failed",
+        description: "Could not find closing odds. Please enter manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setFetchingCLV(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (onDelete && window.confirm('Are you sure you want to delete this bet? This cannot be undone.')) {
+      onDelete(bet.id);
+      onOpenChange(false);
     }
   };
 
@@ -295,9 +326,26 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                       variant="ghost"
                       onClick={handleStartEditClosingOdds}
                       data-testid="button-edit-closing-odds"
+                      title="Manually enter closing odds"
                     >
                       <Edit2 className="h-4 w-4" />
                     </Button>
+                    {!bet.closingOdds && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handleAutoFetchCLV}
+                        disabled={fetchingCLV}
+                        data-testid="button-auto-fetch-clv"
+                        title="Try to automatically fetch closing odds"
+                      >
+                        {fetchingCLV ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -394,36 +442,50 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
           )}
         </div>
 
-        {bet.status === "active" && onSettle && (
-          <DialogFooter className="mt-6 gap-2">
-            <p className="text-sm text-muted-foreground mr-auto">Mark as:</p>
+        <DialogFooter className="mt-6 gap-2 flex-col sm:flex-row">
+          {onDelete && (
             <Button
               variant="outline"
-              onClick={() => onSettle("push")}
-              data-testid="button-settle-push"
+              className="border-red-500/50 text-red-600 hover:bg-red-500/10 sm:mr-auto"
+              onClick={handleDelete}
+              data-testid="button-delete-bet"
             >
-              <Minus className="h-4 w-4 mr-2" />
-              Push
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Bet
             </Button>
-            <Button
-              variant="outline"
-              className="border-red-500/50 text-red-600 hover:bg-red-500/10"
-              onClick={() => onSettle("lost")}
-              data-testid="button-settle-lost"
-            >
-              <ThumbsDown className="h-4 w-4 mr-2" />
-              Lost
-            </Button>
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              onClick={() => onSettle("won")}
-              data-testid="button-settle-won"
-            >
-              <Trophy className="h-4 w-4 mr-2" />
-              Won
-            </Button>
-          </DialogFooter>
-        )}
+          )}
+          
+          {bet.status === "active" && onSettle && (
+            <>
+              <p className="text-sm text-muted-foreground hidden sm:block">Mark as:</p>
+              <Button
+                variant="outline"
+                onClick={() => onSettle("push")}
+                data-testid="button-settle-push"
+              >
+                <Minus className="h-4 w-4 mr-2" />
+                Push
+              </Button>
+              <Button
+                variant="outline"
+                className="border-red-500/50 text-red-600 hover:bg-red-500/10"
+                onClick={() => onSettle("lost")}
+                data-testid="button-settle-lost"
+              >
+                <ThumbsDown className="h-4 w-4 mr-2" />
+                Lost
+              </Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => onSettle("won")}
+                data-testid="button-settle-won"
+              >
+                <Trophy className="h-4 w-4 mr-2" />
+                Won
+              </Button>
+            </>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

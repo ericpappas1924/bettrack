@@ -390,7 +390,15 @@ async function findPlayerPropOdds(
 
         if (playerMatches && outcome.point) {
           // Check if it's Over or Under
-          const isOverOutcome = outcome.name.toLowerCase().includes('over');
+          const outcomeName = outcome.name.toLowerCase();
+          const isOverOutcome = outcomeName.includes('over');
+          const isUnderOutcome = outcomeName.includes('under');
+          
+          // Validate we can determine the direction
+          if (!isOverOutcome && !isUnderOutcome) {
+            console.log(`     ⚠️  Cannot determine Over/Under from outcome name: "${outcome.name}"`);
+            continue;
+          }
           
           if (isOverOutcome === propDetails.isOver) {
             const lineDiff = Math.abs(outcome.point - propDetails.line);
@@ -398,6 +406,9 @@ async function findPlayerPropOdds(
             // Exact match (within 0.1)
             if (lineDiff < 0.1) {
               console.log(`  ✅ EXACT MATCH! Player: ${outcomePlayerName}, Line: ${outcome.point}, ${propDetails.isOver ? 'Over' : 'Under'}, Odds: ${outcome.price}`);
+              console.log(`     Full outcome name: "${outcome.name}"`);
+              console.log(`     Bookmaker: ${bookmaker.title}`);
+              console.log(`     Market: ${market.key}`);
               return outcome.price;
             }
             
@@ -405,6 +416,11 @@ async function findPlayerPropOdds(
             if (!closestMatch || lineDiff < closestMatch.lineDiff) {
               closestMatch = { outcome, bookmakerTitle: bookmaker.title, lineDiff };
               console.log(`     Found line: ${outcome.point} (${propDetails.isOver ? 'Over' : 'Under'}) @ ${outcome.price} - diff: ${lineDiff.toFixed(1)}`);
+            }
+          } else {
+            // Log when we find the player and line but wrong direction
+            if (playerMatches && outcome.point && Math.abs(outcome.point - propDetails.line) < 0.1) {
+              console.log(`     ⚠️  Found exact player & line but OPPOSITE side: ${outcome.name} @ ${outcome.price}`);
             }
           }
         }
@@ -416,6 +432,7 @@ async function findPlayerPropOdds(
       console.log(`\n  ⚠️  No exact line match found. Using closest available line:`);
       console.log(`     Original bet: ${propDetails.line} ${propDetails.isOver ? 'Over' : 'Under'}`);
       console.log(`     Closest line: ${closestMatch.outcome.point} ${propDetails.isOver ? 'Over' : 'Under'} (${closestMatch.bookmakerTitle})`);
+      console.log(`     Full outcome name: "${closestMatch.outcome.name}"`);
       console.log(`     Difference: ${closestMatch.lineDiff.toFixed(1)} ${propDetails.line > closestMatch.outcome.point ? '(line moved down)' : '(line moved up)'}`);
       console.log(`  ✅ Using odds: ${closestMatch.outcome.price}`);
       return closestMatch.outcome.price;

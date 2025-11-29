@@ -38,6 +38,7 @@ interface Bet {
   result?: string | null;
   profit?: string | null;
   clv?: string | null;
+  expectedValue?: string | null;
   projectionSource?: string | null;
   notes?: string | null;
   isFreePlay?: boolean | null;
@@ -160,7 +161,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
       
       toast({
         title: "CLV fetched",
-        description: `Closing odds: ${updatedBet.closingOdds}, CLV: ${updatedBet.clv}%`,
+        description: `Closing odds: ${updatedBet.closingOdds}, CLV: ${updatedBet.clv}%, EV: ${formatCurrency(updatedBet.expectedValue)}`,
       });
     } catch (error) {
       const errorMessage = (error as Error).message || '';
@@ -399,6 +400,21 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                   }`}
                 >
                   {formatCLV(bet.clv)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Expected Value (EV)</p>
+                <p
+                  className={`text-lg font-semibold tabular-nums ${
+                    bet.expectedValue && parseFloat(bet.expectedValue) > 0
+                      ? "text-green-600 dark:text-green-500"
+                      : bet.expectedValue && parseFloat(bet.expectedValue) < 0
+                      ? "text-red-600 dark:text-red-500"
+                      : ""
+                  }`}
+                >
+                  {formatCurrency(bet.expectedValue)}
                 </p>
               </div>
 

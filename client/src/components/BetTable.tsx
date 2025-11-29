@@ -30,6 +30,7 @@ interface Bet {
   result?: string | null;
   profit?: string | null;
   clv?: string | null;
+  expectedValue?: string | null;
   createdAt: Date | string;
   gameStartTime?: Date | string | null;
 }

@@ -339,9 +339,15 @@ export async function registerRoutes(
       // Positive CLV means closing probability is higher (market moved toward your bet)
       const clv = ((closingProb - openingProb) / openingProb) * 100;
       
+      // Calculate Expected Value (EV) in dollars
+      // EV = Stake × (CLV / 100)
+      const stakeNum = parseFloat(existingBet.stake);
+      const expectedValue = stakeNum * (clv / 100);
+      
       const bet = await storage.updateBet(req.params.id, {
         closingOdds,
         clv: clv.toFixed(2),
+        expectedValue: expectedValue.toFixed(2),
       });
       
       res.json(bet);
@@ -423,14 +429,21 @@ export async function registerRoutes(
       const openingOdds = parseInt(existingBet.openingOdds.replace(/[^-\d]/g, ''));
       const clv = calculateCLV(openingOdds, currentOdds);
       
+      // Calculate Expected Value (EV) in dollars
+      const stakeNum = parseFloat(existingBet.stake);
+      const expectedValue = stakeNum * (clv / 100);
+      
       console.log(`📊 Opening Odds: ${openingOdds}`);
       console.log(`📊 Current Odds: ${currentOdds}`);
+      console.log(`📊 Stake: $${stakeNum.toFixed(2)}`);
       console.log(`📊 CLV: ${clv.toFixed(2)}%`);
+      console.log(`📊 Expected Value: $${expectedValue.toFixed(2)}`);
       
-      // Update bet with current odds and CLV
+      // Update bet with current odds, CLV, and EV
       const updatedBet = await storage.updateBet(existingBet.id, {
         closingOdds: currentOdds > 0 ? `+${currentOdds}` : `${currentOdds}`,
         clv: clv.toFixed(2),
+        expectedValue: expectedValue.toFixed(2),
       });
       
       console.log(`✅ Bet updated successfully`);

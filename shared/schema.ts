@@ -43,6 +43,7 @@ export const bets = pgTable("bets", {
   result: text("result"),
   profit: text("profit"),
   clv: text("clv"),
+  expectedValue: text("expected_value"),
   projectionSource: text("projection_source"),
   notes: text("notes"),
   isFreePlay: boolean("is_free_play").default(false),
@@ -65,6 +66,7 @@ export const insertBetSchema = createInsertSchema(bets).omit({
   potentialWin: z.string().nullable().optional(),
   profit: z.string().nullable().optional(),
   clv: z.string().nullable().optional(),
+  expectedValue: z.string().nullable().optional(),
   gameStartTime: z.date().nullable().optional(),
   settledAt: z.date().nullable().optional(),
 });
@@ -76,6 +78,7 @@ export const updateBetSchema = z.object({
   result: z.enum(["won", "lost", "push"]).nullable().optional(),
   profit: z.string().optional(),
   clv: z.string().optional(),
+  expectedValue: z.string().optional(),
   notes: z.string().optional(),
   settledAt: z.date().nullable().optional(),
 });

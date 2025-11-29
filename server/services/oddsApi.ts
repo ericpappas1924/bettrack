@@ -400,3 +400,16 @@ export function calculateCLV(openingOdds: number, closingOdds: number): number {
   return ((closingProb - openingProb) / openingProb) * 100;
 }
 
+/**
+ * Calculate Expected Value (EV) in dollars based on CLV
+ * @param stake - Amount wagered
+ * @param clvPercent - CLV as percentage
+ * @returns Expected value in dollars
+ */
+export function calculateExpectedValue(stake: number, clvPercent: number): number {
+  // EV = Stake × (CLV / 100)
+  // Example: $100 stake with +7% CLV = $7.00 expected profit
+  //          $100 stake with -5% CLV = -$5.00 expected loss
+  return stake * (clvPercent / 100);
+}
+

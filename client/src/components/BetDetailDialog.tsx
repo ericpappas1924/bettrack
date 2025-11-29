@@ -39,6 +39,8 @@ interface Bet {
   profit?: string | null;
   clv?: string | null;
   expectedValue?: string | null;
+  clvFetchError?: string | null;
+  clvLastAttempt?: Date | string | null;
   projectionSource?: string | null;
   notes?: string | null;
   isFreePlay?: boolean | null;

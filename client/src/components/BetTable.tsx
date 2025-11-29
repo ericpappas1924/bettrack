@@ -12,7 +12,13 @@ import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { RefreshCw, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import {
   americanToImpliedProbability,
@@ -33,6 +39,8 @@ interface Bet {
   profit?: string | null;
   clv?: string | null;
   expectedValue?: string | null;
+  clvFetchError?: string | null;
+  clvLastAttempt?: Date | string | null;
   createdAt: Date | string;
   gameStartTime?: Date | string | null;
 }
@@ -128,20 +136,36 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           </p>
                         )}
                       </div>
-                      {bet.status === "active" && !bet.clv && onFetchCLV && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8 shrink-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onFetchCLV(bet.id);
-                          }}
-                          disabled={fetchingCLV.has(bet.id)}
-                          title="Fetch current CLV"
-                        >
-                          <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
-                        </Button>
+                      {bet.status === "active" && !bet.clv && (
+                        <>
+                          {bet.clvFetchError && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-sm">CLV Fetch Failed: {bet.clvFetchError}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {onFetchCLV && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onFetchCLV(bet.id);
+                              }}
+                              disabled={fetchingCLV.has(bet.id)}
+                              title="Fetch current CLV"
+                            >
+                              <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -328,20 +352,36 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     {formatCurrency(bet.profit)}
                   </TableCell>
                   <TableCell>
-                    {bet.status === "active" && !bet.clv && onFetchCLV && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onFetchCLV(bet.id);
-                        }}
-                        disabled={fetchingCLV.has(bet.id)}
-                        title="Fetch current CLV"
-                      >
-                        <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
-                      </Button>
+                    {bet.status === "active" && !bet.clv && (
+                      <div className="flex items-center gap-1">
+                        {bet.clvFetchError && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-sm max-w-xs">CLV Fetch Failed: {bet.clvFetchError}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        {onFetchCLV && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onFetchCLV(bet.id);
+                            }}
+                            disabled={fetchingCLV.has(bet.id)}
+                            title="Fetch current CLV"
+                          >
+                            <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>

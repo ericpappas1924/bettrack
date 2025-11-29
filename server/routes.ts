@@ -129,7 +129,15 @@ export async function registerRoutes(
       console.log(`\n💾 Saving ${betsWithUser.length} bets to database...`);
       console.log(`Sample bet being saved:`, JSON.stringify(betsWithUser[0], null, 2));
       
-      const betsArray = z.array(insertBetSchema).parse(betsWithUser);
+      // Convert ISO date strings to Date objects for Zod validation
+      const betsWithDates = betsWithUser.map((bet: any) => ({
+        ...bet,
+        gameStartTime: bet.gameStartTime ? new Date(bet.gameStartTime) : null,
+        settledAt: bet.settledAt ? new Date(bet.settledAt) : null,
+        createdAt: bet.createdAt ? new Date(bet.createdAt) : undefined,
+      }));
+      
+      const betsArray = z.array(insertBetSchema).parse(betsWithDates);
       const createdBets = await storage.createBets(betsArray);
       
       console.log(`\n✅ Successfully imported ${createdBets.length} bets`);

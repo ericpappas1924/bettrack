@@ -21,6 +21,17 @@ export interface OddsGame {
   commence_time: string; // ISO 8601 datetime
   home_team: string;
   away_team: string;
+  bookmakers?: Array<{
+    key: string;
+    title: string;
+    markets: Array<{
+      key: string;
+      outcomes: Array<{
+        name: string;
+        price: number;
+      }>;
+    }>;
+  }>;
 }
 
 /**
@@ -239,29 +250,65 @@ export async function findClosingOdds(
   const sportKey = SPORT_MAP[sport];
   
   if (!sportKey) {
-    console.log(`No Odds API mapping for sport: ${sport}`);
+    console.log(`❌ No Odds API mapping for sport: ${sport}`);
     return null;
   }
 
   try {
+    console.log(`\n🔍 Finding current odds for: ${matchup} (${sport})`);
     const games = await fetchGamesForSport(sportKey);
     
     // Find matching game
     const matchingGame = games.find(game => matchesGame(game, matchup));
     
     if (!matchingGame) {
-      console.log(`No matching game found for: ${matchup} in ${sport}`);
+      console.log(`❌ No matching game found for: ${matchup} in ${sport}`);
       return null;
     }
 
-    // The Odds API response includes bookmaker odds
-    // For a simple implementation, we'll just return that we found the game
-    // In a production system, you'd parse the bookmaker odds here
-    // For now, return null to indicate we need more specific implementation
-    console.log(`Found game for ${matchup}, but detailed odds parsing not yet implemented`);
+    console.log(`✅ Found matching game: ${matchingGame.home_team} vs ${matchingGame.away_team}`);
+    
+    // Check if bookmaker odds are available
+    if (!matchingGame.bookmakers || matchingGame.bookmakers.length === 0) {
+      console.log(`⚠️  No bookmaker odds available for this game`);
+      return null;
+    }
+
+    console.log(`📊 Bookmakers available: ${matchingGame.bookmakers.length}`);
+    
+    // Try to find h2h (moneyline) market
+    for (const bookmaker of matchingGame.bookmakers) {
+      const h2hMarket = bookmaker.markets?.find(m => m.key === 'h2h');
+      if (!h2hMarket || !h2hMarket.outcomes) continue;
+      
+      console.log(`   Bookmaker: ${bookmaker.title}`);
+      
+      // If team is specified, find odds for that team
+      if (team) {
+        const normalizedTeam = normalizeTeamName(team);
+        const outcome = h2hMarket.outcomes.find(o => 
+          normalizeTeamName(o.name).includes(normalizedTeam) || 
+          normalizedTeam.includes(normalizeTeamName(o.name))
+        );
+        
+        if (outcome) {
+          console.log(`✅ Found odds for ${team}: ${outcome.price}`);
+          return outcome.price;
+        }
+      } else {
+        // No team specified, return first available odds
+        // (This is for spread/total bets where team doesn't matter)
+        if (h2hMarket.outcomes.length > 0) {
+          console.log(`✅ Returning first available odds: ${h2hMarket.outcomes[0].price}`);
+          return h2hMarket.outcomes[0].price;
+        }
+      }
+    }
+    
+    console.log(`⚠️  Could not find matching odds`);
     return null;
   } catch (error) {
-    console.error('Error finding closing odds:', error);
+    console.error('❌ Error finding closing odds:', error);
     return null;
   }
 }

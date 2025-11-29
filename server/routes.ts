@@ -376,46 +376,59 @@ export async function registerRoutes(
       console.log(`Game Start Time: ${existingBet.gameStartTime}`);
       console.log(`Status: ${existingBet.status}`);
       
-      // Check if game has started/finished (need gameStartTime)
-      if (!existingBet.gameStartTime) {
-        console.log(`⚠️  No game start time - cannot determine if game has started`);
+      if (!existingBet.game) {
+        console.log(`⚠️  No game matchup - cannot fetch odds`);
         return res.status(400).json({ 
-          error: "Cannot fetch closing odds: Game start time unknown",
+          error: "Cannot fetch odds: No game matchup available",
           suggestion: "Please enter closing odds manually"
         });
       }
       
-      const gameTime = new Date(existingBet.gameStartTime);
-      const now = new Date();
-      const gameStarted = now >= gameTime;
+      // Try to find current odds from Odds API
+      const { findClosingOdds, calculateCLV } = await import('./services/oddsApi');
       
-      console.log(`Game time: ${gameTime.toISOString()}`);
-      console.log(`Current time: ${now.toISOString()}`);
-      console.log(`Game started: ${gameStarted}`);
+      console.log(`\n🔍 Fetching current odds from Odds API...`);
+      const currentOdds = await findClosingOdds(
+        existingBet.game,
+        existingBet.sport,
+        'h2h',
+        existingBet.team
+      );
       
-      if (!gameStarted) {
-        console.log(`⚠️  Game hasn't started yet - closing line not available`);
-        return res.status(400).json({ 
-          error: "Game hasn't started yet",
-          suggestion: "Closing odds are only available after game starts"
+      if (!currentOdds) {
+        console.log(`❌ Could not find odds for this game`);
+        console.log(`   This could be because:`);
+        console.log(`   - Game is not available in Odds API yet`);
+        console.log(`   - Team name doesn't match API format`);
+        console.log(`   - Game has already finished`);
+        console.log(`========== AUTO-FETCH CLV COMPLETE ==========\n`);
+        
+        return res.status(404).json({ 
+          error: "Could not find current odds for this game",
+          suggestion: "Please enter closing odds manually"
         });
       }
       
-      console.log(`\n🔍 Attempting to fetch closing odds from Odds API...`);
-      console.log(`   Sport: ${existingBet.sport}`);
-      console.log(`   Matchup: ${existingBet.game}`);
+      console.log(`✅ Found current odds: ${currentOdds}`);
       
-      // Try to find closing odds from Odds API
-      // For now, return a helpful error - full implementation would use oddsApi.findClosingOdds()
-      console.log(`\n⚠️  Auto-fetch functionality not fully implemented`);
-      console.log(`   Reason: Closing odds require market-specific matching`);
-      console.log(`   Workaround: Please enter closing odds manually`);
+      // Calculate CLV
+      const openingOdds = parseInt(existingBet.openingOdds.replace(/[^-\d]/g, ''));
+      const clv = calculateCLV(openingOdds, currentOdds);
+      
+      console.log(`📊 Opening Odds: ${openingOdds}`);
+      console.log(`📊 Current Odds: ${currentOdds}`);
+      console.log(`📊 CLV: ${clv.toFixed(2)}%`);
+      
+      // Update bet with current odds and CLV
+      const updatedBet = await storage.updateBet(existingBet.id, {
+        closingOdds: currentOdds > 0 ? `+${currentOdds}` : `${currentOdds}`,
+        clv: clv.toFixed(2),
+      });
+      
+      console.log(`✅ Bet updated successfully`);
       console.log(`========== AUTO-FETCH CLV COMPLETE ==========\n`);
       
-      return res.status(404).json({ 
-        error: "Auto-fetch not fully implemented yet. Please enter closing odds manually.",
-        suggestion: "Check your sportsbook or OddsPortal.com for closing line"
-      });
+      res.json(updatedBet);
       
     } catch (error) {
       console.error("\n❌ Error auto-fetching CLV:", error);

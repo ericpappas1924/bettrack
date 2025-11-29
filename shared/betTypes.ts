@@ -174,6 +174,25 @@ export function getSportFromText(text: string): Sport {
   if (footballKeywords.some(keyword => upper.includes(keyword))) {
     // Try to determine if it's college or pro
     if (upper.includes('COLLEGE') || upper.includes('NCAA')) return SPORTS.NCAAF;
+    
+    // Check for common NCAAF teams
+    const ncaafTeams = [
+      'OHIO STATE', 'MICHIGAN', 'ALABAMA', 'GEORGIA', 'LSU', 'CLEMSON',
+      'NOTRE DAME', 'USC', 'UCLA', 'PENN STATE', 'OREGON', 'FLORIDA',
+      'TEXAS', 'OKLAHOMA', 'AUBURN', 'TENNESSEE', 'FLORIDA STATE',
+      'MIAMI', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
+      'SOUTH CAROLINA', 'NORTH CAROLINA', 'VIRGINIA TECH', 'VIRGINIA',
+      'BAYLOR', 'HOUSTON', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
+      'WASHINGTON', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
+      'KENTUCKY', 'VANDERBILT', 'MISSISSIPPI', 'OLE MISS', 'MISS STATE',
+      'ARKANSAS', 'MISSOURI', 'TEXAS A&M', 'NC STATE', 'DUKE', 'WAKE FOREST',
+      'BOSTON COLLEGE', 'SYRACUSE', 'PITT', 'LOUISVILLE', 'RUTGERS',
+      'MARYLAND', 'MINNESOTA', 'PURDUE', 'ILLINOIS', 'INDIANA',
+      'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO', 'UTAH', 'BYU'
+    ];
+    
+    if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;
+    
     return SPORTS.NFL; // Default to NFL for football
   }
   

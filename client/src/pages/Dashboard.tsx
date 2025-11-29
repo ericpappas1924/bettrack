@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { MetricCard } from "@/components/MetricCard";
@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { LiveStat } from "@/components/LiveStatsBadge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User, RefreshCw } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -41,6 +42,25 @@ export default function Dashboard() {
   const { data: bets = [], isLoading } = useQuery<Bet[]>({
     queryKey: ["/api/bets"],
   });
+
+  // Fetch live stats for active bets
+  const { data: liveStats = [], refetch: refetchLiveStats } = useQuery<LiveStat[]>({
+    queryKey: ["/api/bets/live-stats"],
+    refetchInterval: 60000, // Refetch every 60 seconds
+    enabled: bets.some((bet) => bet.status === "active" && bet.betType === "Player Prop"),
+  });
+
+  // Auto-refresh live stats periodically
+  useEffect(() => {
+    const hasActiveBets = bets.some((bet) => bet.status === "active" && bet.betType === "Player Prop");
+    if (hasActiveBets) {
+      const interval = setInterval(() => {
+        refetchLiveStats();
+      }, 60000); // Every 60 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [bets, refetchLiveStats]);
 
   const importMutation = useMutation({
     mutationFn: async (importedBets: any[]) => {
@@ -148,9 +168,35 @@ export default function Dashboard() {
     return sum + calculateExpectedValue(stake, liveOdds, liveProbability);
   }, 0);
 
-  const handleAddBet = (data: any) => {
-    console.log("Adding bet:", data);
-    setAddBetOpen(false);
+  const handleAddBet = async (data: any) => {
+    try {
+      // Convert gameStartTime from string to Date if provided
+      const betData = {
+        ...data,
+        gameStartTime: data.gameStartTime ? new Date(data.gameStartTime).toISOString() : null,
+      };
+      
+      const res = await apiRequest("POST", "/api/bets", betData);
+      await res.json();
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "Bet added",
+        description: "Your bet has been successfully added",
+      });
+      setAddBetOpen(false);
+    } catch (error) {
+      if (isUnauthorizedError(error as Error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({
+        title: "Failed to add bet",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleImportBets = (importedBets: any[]) => {
@@ -172,6 +218,7 @@ export default function Dashboard() {
       projectionSource: bet.projectionSource || null,
       notes: bet.notes || null,
       isFreePlay: bet.isFreePlay || false,
+      gameStartTime: bet.gameStartTime || null,
       settledAt: bet.settledAt || null,
     }));
     importMutation.mutate(formattedBets);
@@ -335,6 +382,7 @@ export default function Dashboard() {
             ) : (
               <BetTable
                 bets={filteredBets}
+                liveStats={liveStats}
                 onRowClick={(bet) => setDetailBet(bet as Bet)}
               />
             )}

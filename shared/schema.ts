@@ -47,6 +47,7 @@ export const bets = pgTable("bets", {
   notes: text("notes"),
   isFreePlay: boolean("is_free_play").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  gameStartTime: timestamp("game_start_time"),
   settledAt: timestamp("settled_at"),
 });
 
@@ -64,6 +65,7 @@ export const insertBetSchema = createInsertSchema(bets).omit({
   potentialWin: z.string().nullable().optional(),
   profit: z.string().nullable().optional(),
   clv: z.string().nullable().optional(),
+  gameStartTime: z.date().nullable().optional(),
   settledAt: z.date().nullable().optional(),
 });
 

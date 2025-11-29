@@ -1,8 +1,10 @@
+import { getSportFromText, isLiveBet, extractOddsFromText, getBetCategory, type Sport, type BetType, type BetCategory } from '@shared/betTypes';
+
 export interface ParsedBet {
   id: string;
   date: Date;
-  betType: 'PLAYER_PROPS' | 'STRAIGHT' | 'PARLAY';
-  sport: 'NFL' | 'NBA' | 'CFB' | 'NCAAF';
+  betType: string;
+  sport: Sport;
   game: string;
   description: string;
   legs?: string[];
@@ -11,6 +13,20 @@ export interface ParsedBet {
   potentialWin: number;
   odds: number;
   isFreePlay: boolean;
+  isLive: boolean;
+  category?: BetCategory;
+  gameId?: string;
+  league?: string;
+  parseWarnings?: string[];
+}
+
+export interface ParseResult {
+  bets: ParsedBet[];
+  errors: Array<{
+    blockIndex: number;
+    error: string;
+    rawText: string;
+  }>;
 }
 
 function parseDate(dateStr: string, timeStr: string): Date {
@@ -51,45 +67,67 @@ function calculateAmericanOdds(stake: number, potentialWin: number): number {
   }
 }
 
-function detectSport(text: string): 'NFL' | 'NBA' | 'CFB' | 'NCAAF' {
-  const upper = text.toUpperCase();
-  if (upper.includes('[NBA]')) return 'NBA';
-  if (upper.includes('[CFB]')) return 'CFB';
-  if (upper.includes('[NFL]')) return 'NFL';
-  if (upper.includes('[NCAAF]')) return 'NCAAF';
+function extractLiveBetDetails(block: string): { 
+  game: string; 
+  description: string; 
+  sport: Sport;
+  gameId?: string;
+  league?: string;
+  odds: number | null;
+} {
+  // Extract game ID (e.g., G270563108)
+  const gameIdMatch = block.match(/G(\d+)/);
+  const gameId = gameIdMatch ? gameIdMatch[0] : undefined;
   
-  const nflTeams = ['CHIEFS', 'COWBOYS', 'LIONS', 'PACKERS', 'BENGALS', 'RAVENS', 
-    'EAGLES', 'BEARS', 'TEXANS', 'COLTS', '49ERS', 'BROWNS', 'DOLPHINS', 'SAINTS',
-    'PATRIOTS', 'GIANTS', 'SEAHAWKS', 'RAMS', 'CARDINALS', 'FALCONS', 'PANTHERS',
-    'BUCCANEERS', 'VIKINGS', 'CHARGERS', 'RAIDERS', 'BRONCOS', 'JETS', 'BILLS',
-    'STEELERS', 'TITANS', 'JAGUARS', 'COMMANDERS'];
+  // Find the line with match details (has "vs" in it)
+  const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+  let game = '';
+  let description = '';
+  let odds: number | null = null;
   
-  const nbaTeams = ['BUCKS', 'HEAT', 'PACERS', 'RAPTORS', 'ROCKETS', 'WARRIORS',
-    'KNICKS', 'HORNETS', 'SPURS', 'BLAZERS', 'TIMBERWOLVES', 'THUNDER', 'SUNS',
-    'KINGS', 'GRIZZLIES', 'PELICANS', 'LAKERS', 'CLIPPERS', 'CELTICS', 'NETS',
-    'SIXERS', '76ERS', 'BULLS', 'CAVALIERS', 'PISTONS', 'HAWKS', 'MAGIC', 'WIZARDS',
-    'MAVERICKS', 'NUGGETS', 'JAZZ'];
-  
-  for (const team of nflTeams) {
-    if (upper.includes(team)) return 'NFL';
+  for (const line of lines) {
+    if (line.includes(' vs ')) {
+      // Format: "293492582 - ARCRED vs HAVU Gaming / Match / Winner (2 way) / ARCRED -289"
+      // Extract teams and full description
+      const parts = line.split(' - ');
+      if (parts.length >= 2) {
+        const restOfLine = parts.slice(1).join(' - ');
+        const pathParts = restOfLine.split(' / ');
+        
+        // First part has teams
+        const teamsMatch = restOfLine.match(/([A-Za-z0-9\s]+)\s+vs\s+([A-Za-z0-9\s]+)/i);
+        if (teamsMatch) {
+          game = teamsMatch[0];
+        }
+        
+        description = restOfLine;
+        
+        // Extract odds from last part
+        odds = extractOddsFromText(restOfLine);
+      }
+      break;
+    }
   }
-  for (const team of nbaTeams) {
-    if (upper.includes(team)) return 'NBA';
+  
+  // Extract sport and league from sport line (e.g., "E-Sports / CS 2. CCT")
+  const sport = getSportFromText(block);
+  let league: string | undefined;
+  
+  for (const line of lines) {
+    if (line.includes('/')) {
+      const sportLineMatch = line.match(/E-Sports\s*\/\s*([^.]+)\.?\s*(.+)?/i);
+      if (sportLineMatch) {
+        league = sportLineMatch[2]?.trim();
+        break;
+      }
+    }
   }
   
-  const cfbTeams = ['OHIO STATE', 'ALABAMA', 'GEORGIA', 'MICHIGAN', 'CLEMSON',
-    'NOTRE DAME', 'TEXAS', 'USC', 'OKLAHOMA', 'OREGON', 'PENN STATE', 'LSU',
-    'NAVY', 'ARMY', 'MEMPHIS', 'FLORIDA', 'AUBURN', 'TENNESSEE', 'WISCONSIN'];
-  
-  for (const team of cfbTeams) {
-    if (upper.includes(team)) return 'CFB';
-  }
-  
-  return 'NFL';
+  return { game, description, sport, gameId, league, odds };
 }
 
-function extractStraightBetDetails(block: string): { game: string; description: string; sport: 'NFL' | 'NBA' | 'CFB' | 'NCAAF' } {
-  const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+)/);
+function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport } {
+  const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+?)(?=\s*\n|Pending|$)/s);
   if (straightMatch) {
     const gameDate = straightMatch[1];
     const sportTag = straightMatch[2];
@@ -98,32 +136,25 @@ function extractStraightBetDetails(block: string): { game: string; description: 
     
     betDetails = betDetails.replace(/\s*\(Score:[^)]+\)/, '').trim();
     
-    let sport: 'NFL' | 'NBA' | 'CFB' | 'NCAAF' = 'NFL';
-    if (sportTag === 'NFL') sport = 'NFL';
-    else if (sportTag === 'NBA') sport = 'NBA';
-    else if (sportTag === 'CFB') sport = 'CFB';
-    else if (sportTag === 'NCAAF') sport = 'NCAAF';
+    let sport = getSportFromText(sportTag);
     
-    const teamMatch = betDetails.match(/^([A-Z\s]+)/);
+    const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
     const game = teamMatch ? teamMatch[1].trim() : betDetails;
     
     return { game, description: betDetails, sport };
   }
   
-  return { game: 'Unknown', description: 'Unknown bet', sport: detectSport(block) };
+  return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block) };
 }
 
 function extractPlayerPropDetails(block: string): { game: string; description: string } {
-  const gamePatterns = [
-    /([A-Za-z\s]+(?:Chiefs|Cowboys|Bengals|Ravens|Bucks|Heat|Pacers|Raptors|Rockets|Warriors|Knicks|Hornets|Spurs|Blazers|Timberwolves|Thunder|Suns|Kings|Grizzlies|Pelicans|Giants|Patriots|Saints|Dolphins|Texans|Colts|49ers|Browns|Eagles|Bears|Lions|Packers|Navy|Memphis|Lakers|Celtics|Nets|Clippers|Mavericks|Nuggets)[A-Za-z\s]*)\s+vs\s+([A-Za-z\s]+)/i,
-    /([A-Za-z\s]+)\s+vs\s+([A-Za-z\s]+)/i
-  ];
-  
+  // Find the line with "vs" that doesn't contain parentheses (the game line)
+  const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   let game = '';
-  for (const pattern of gamePatterns) {
-    const match = block.match(pattern);
-    if (match) {
-      game = match[0].trim();
+  
+  for (const line of lines) {
+    if (line.includes(' vs ') && !line.includes('(') && !line.includes('[')) {
+      game = line;
       break;
     }
   }
@@ -143,6 +174,7 @@ function extractPlayerPropDetails(block: string): { game: string; description: s
       } else if (match[3]) {
         description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
       }
+      description = description.replace(/\n/g, ' ').replace(/\s+/g, ' ');
       break;
     }
   }
@@ -181,16 +213,19 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
   };
 }
 
-export function parseBetPaste(rawText: string): ParsedBet[] {
+export function parseBetPaste(rawText: string): ParseResult {
   const bets: ParsedBet[] = [];
+  const errors: ParseResult['errors'] = [];
   
-  const betBlocks = rawText.split(/(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}-\d{4})/);
+  const betBlocks = rawText.split(/\n(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}-\d{4}\s*\n)/);
   
-  for (const block of betBlocks) {
+  for (let blockIndex = 0; blockIndex < betBlocks.length; blockIndex++) {
+    const block = betBlocks[blockIndex];
     if (!block.trim()) continue;
     if (block.trim() === 'TOTAL') continue;
     
     try {
+      const warnings: string[] = [];
       const lines = block.split('\n').map(l => l.trim()).filter(l => l);
       if (lines.length < 2) continue;
       
@@ -223,35 +258,53 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
       const id = idMatch ? idMatch[1] : `bet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       const isFreePlay = block.includes('[FREE PLAY]');
+      const isLive = isLiveBet(block);
       
-      let betType: ParsedBet['betType'] = 'STRAIGHT';
+      let betType = 'Straight';
       if (block.includes('PLAYER PROPS')) {
-        betType = 'PLAYER_PROPS';
+        betType = 'Player Prop';
       } else if (block.includes('PARLAY')) {
-        betType = 'PARLAY';
+        betType = 'Parlay';
+      } else if (isLive) {
+        betType = 'Live';
       }
       
       const stakeMatch = block.match(/\$[\d,]+(?:\.\d{2})?\s*\/\s*\$[\d,]+(?:\.\d{2})?/);
       const { stake, potentialWin } = stakeMatch ? parseStakeAndWin(stakeMatch[0]) : { stake: 0, potentialWin: 0 };
       
-      const odds = calculateAmericanOdds(stake, potentialWin);
+      let calculatedOdds = calculateAmericanOdds(stake, potentialWin);
       
       let game = '';
       let description = '';
       let legs: string[] | undefined;
-      let sport: ParsedBet['sport'] = 'NFL';
+      let sport = getSportFromText(block);
+      let gameId: string | undefined;
+      let league: string | undefined;
       
-      if (betType === 'PLAYER_PROPS') {
+      // Handle live betting bets (especially esports)
+      if (isLive) {
+        const liveDetails = extractLiveBetDetails(block);
+        game = liveDetails.game;
+        description = liveDetails.description;
+        sport = liveDetails.sport;
+        gameId = liveDetails.gameId;
+        league = liveDetails.league;
+        
+        // Use extracted odds if available, otherwise calculate from stake/win
+        if (liveDetails.odds !== null) {
+          calculatedOdds = liveDetails.odds;
+        }
+      } else if (betType === 'Player Prop') {
         const propDetails = extractPlayerPropDetails(block);
         game = propDetails.game;
         description = propDetails.description;
-        sport = detectSport(block);
-      } else if (betType === 'PARLAY') {
+        // Re-detect sport in case it wasn't detected earlier
+        sport = getSportFromText(block);
+      } else if (betType === 'Parlay') {
         const parlayDetails = extractParlayDetails(block);
         legs = parlayDetails.legs;
         description = parlayDetails.description;
         game = legs.join(' / ');
-        sport = detectSport(block);
       } else {
         const straightDetails = extractStraightBetDetails(block);
         game = straightDetails.game;
@@ -269,6 +322,25 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
         status = 'pending';
       }
       
+      // Detect parsing issues
+      if (!game || game === 'Unknown' || game === 'Unknown Game') {
+        warnings.push('Game could not be identified');
+      }
+      if (!description || description === 'Unknown bet') {
+        warnings.push('Bet details could not be parsed');
+      }
+      if (stake === 0 && !isFreePlay) {
+        warnings.push('Stake amount not found');
+      }
+      if (potentialWin === 0) {
+        warnings.push('Potential win amount not found');
+      }
+      if (calculatedOdds === 0) {
+        warnings.push('Odds could not be calculated');
+      }
+      
+      const category = getBetCategory(betType, sport, isLive, isFreePlay);
+      
       bets.push({
         id,
         date,
@@ -280,33 +352,53 @@ export function parseBetPaste(rawText: string): ParsedBet[] {
         status,
         stake: isFreePlay ? 0 : stake,
         potentialWin,
-        odds,
-        isFreePlay
+        odds: calculatedOdds,
+        isFreePlay,
+        isLive,
+        category,
+        gameId,
+        league,
+        parseWarnings: warnings.length > 0 ? warnings : undefined
       });
       
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown parsing error';
+      errors.push({
+        blockIndex,
+        error: errorMessage,
+        rawText: block.substring(0, 200) // First 200 chars for reference
+      });
       console.warn('Failed to parse bet block:', block, e);
     }
   }
   
-  return bets;
+  return { bets, errors };
 }
 
 export function convertToAppBet(parsed: ParsedBet) {
-  const betTypeMap: { [key: string]: string } = {
-    'PLAYER_PROPS': 'Player Prop',
-    'STRAIGHT': 'Straight',
-    'PARLAY': 'Parlay'
-  };
+  // Build notes with additional context
+  let notes = '';
+  if (parsed.legs) {
+    notes = parsed.legs.join('\n');
+  }
+  if (parsed.league) {
+    notes = notes ? `${notes}\nLeague: ${parsed.league}` : `League: ${parsed.league}`;
+  }
+  if (parsed.gameId) {
+    notes = notes ? `${notes}\nGame ID: ${parsed.gameId}` : `Game ID: ${parsed.gameId}`;
+  }
+  if (parsed.category) {
+    notes = notes ? `${notes}\nCategory: ${parsed.category}` : `Category: ${parsed.category}`;
+  }
   
   return {
     id: parsed.id,
-    sport: parsed.sport === 'CFB' ? 'NCAAF' : parsed.sport,
-    betType: betTypeMap[parsed.betType] || parsed.betType,
+    sport: parsed.sport,
+    betType: parsed.betType,
     team: parsed.description || parsed.game,
     game: parsed.game,
     openingOdds: parsed.odds.toString(),
-    liveOdds: null,
+    liveOdds: parsed.isLive ? parsed.odds.toString() : null,
     closingOdds: null,
     stake: parsed.stake.toFixed(2),
     potentialWin: parsed.potentialWin.toFixed(2),
@@ -316,9 +408,10 @@ export function convertToAppBet(parsed: ParsedBet) {
             parsed.status === 'lost' ? (-parsed.stake).toFixed(2) : null,
     clv: null,
     projectionSource: null,
-    notes: parsed.legs ? parsed.legs.join('\n') : null,
+    notes: notes || null,
     isFreePlay: parsed.isFreePlay,
     createdAt: parsed.date,
+    gameStartTime: null, // Game start time not available in paste format
     settledAt: parsed.status !== 'pending' ? new Date() : null,
   };
 }

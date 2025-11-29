@@ -9,6 +9,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
+import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import {
@@ -30,14 +31,19 @@ interface Bet {
   profit?: string | null;
   clv?: string | null;
   createdAt: Date | string;
+  gameStartTime?: Date | string | null;
 }
 
 interface BetTableProps {
   bets: Bet[];
+  liveStats?: LiveStat[];
   onRowClick?: (bet: Bet) => void;
 }
 
-export function BetTable({ bets, onRowClick }: BetTableProps) {
+export function BetTable({ bets, liveStats = [], onRowClick }: BetTableProps) {
+  const getLiveStatForBet = (betId: string) => {
+    return liveStats.find(stat => stat.betId === betId);
+  };
   const formatCurrency = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "-";
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -85,6 +91,7 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
         {bets.map((bet) => {
           const { baselineProbability, liveProbability } = getWinProbabilities(bet);
           const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
+          const liveStat = getLiveStatForBet(bet.id);
 
           return (
             <Card
@@ -99,6 +106,7 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="secondary" className="text-xs">{bet.sport}</Badge>
                       <BetStatusBadge status={bet.status} result={bet.result} />
+                      {liveStat && <LiveStatsBadge liveStat={liveStat} compact />}
                     </div>
                     <p className="font-medium truncate">{bet.team}</p>
                     <p className="text-xs text-muted-foreground">{bet.betType}</p>
@@ -115,63 +123,73 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-3 border-t">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Stake</p>
-                    <p className="font-semibold tabular-nums text-sm">
-                      {formatCurrency(bet.stake)}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    {bet.status === "active" ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">Win %</p>
-                        <LiveProbabilityBadge
-                          baselineProbability={baselineProbability}
-                          liveProbability={liveProbability}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground">P/L</p>
-                        <p
-                          className={`font-semibold tabular-nums text-sm ${
-                            bet.profit && parseFloat(bet.profit) > 0
-                              ? "text-green-600 dark:text-green-500"
-                              : bet.profit && parseFloat(bet.profit) < 0
-                              ? "text-red-600 dark:text-red-500"
-                              : ""
-                          }`}
-                        >
-                          {formatCurrency(bet.profit)}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {bet.status === "active" ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">Est. W/L</p>
-                        <p
-                          className={`font-semibold tabular-nums text-sm ${
-                            estimatedEV !== null && estimatedEV > 0
-                              ? "text-green-600 dark:text-green-500"
+                <div className="space-y-2 pt-3 border-t">
+                  {bet.gameStartTime && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Game Time</p>
+                      <p className="text-sm">
+                        {format(new Date(bet.gameStartTime), "MMM dd, h:mm a")}
+                      </p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Stake</p>
+                      <p className="font-semibold tabular-nums text-sm">
+                        {formatCurrency(bet.stake)}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      {bet.status === "active" ? (
+                        <>
+                          <p className="text-xs text-muted-foreground">Win %</p>
+                          <LiveProbabilityBadge
+                            baselineProbability={baselineProbability}
+                            liveProbability={liveProbability}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground">P/L</p>
+                          <p
+                            className={`font-semibold tabular-nums text-sm ${
+                              bet.profit && parseFloat(bet.profit) > 0
+                                ? "text-green-600 dark:text-green-500"
+                                : bet.profit && parseFloat(bet.profit) < 0
+                                ? "text-red-600 dark:text-red-500"
+                                : ""
+                            }`}
+                          >
+                            {formatCurrency(bet.profit)}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {bet.status === "active" ? (
+                        <>
+                          <p className="text-xs text-muted-foreground">Est. W/L</p>
+                          <p
+                            className={`font-semibold tabular-nums text-sm ${
+                              estimatedEV !== null && estimatedEV > 0
+                                ? "text-green-600 dark:text-green-500"
                               : estimatedEV !== null && estimatedEV < 0
-                              ? "text-red-600 dark:text-red-500"
-                              : ""
-                          }`}
-                        >
-                          {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs text-muted-foreground">To Win</p>
-                        <p className="font-semibold tabular-nums text-sm">
-                          {formatCurrency(bet.potentialWin)}
-                        </p>
-                      </>
-                    )}
+                                ? "text-red-600 dark:text-red-500"
+                                : ""
+                            }`}
+                          >
+                            {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground">To Win</p>
+                          <p className="font-semibold tabular-nums text-sm">
+                            {formatCurrency(bet.potentialWin)}
+                          </p>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -185,7 +203,8 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-24">Date</TableHead>
+              <TableHead className="w-24">Bet Placed</TableHead>
+              <TableHead className="w-32">Game Time</TableHead>
               <TableHead className="w-20">Sport</TableHead>
               <TableHead>Team/Player</TableHead>
               <TableHead className="w-24 text-right">Odds</TableHead>
@@ -200,6 +219,7 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
             {bets.map((bet) => {
               const { baselineProbability, liveProbability } = getWinProbabilities(bet);
               const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
+              const liveStat = getLiveStatForBet(bet.id);
 
               return (
                 <TableRow
@@ -211,6 +231,11 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
                   <TableCell className="text-sm">
                     {format(new Date(bet.createdAt), "MMM dd")}
                   </TableCell>
+                  <TableCell className="text-sm">
+                    {bet.gameStartTime 
+                      ? format(new Date(bet.gameStartTime), "MMM dd, h:mm a")
+                      : "-"}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="text-xs">
                       {bet.sport}
@@ -220,6 +245,11 @@ export function BetTable({ bets, onRowClick }: BetTableProps) {
                     <div>
                       <p className="font-medium">{bet.team}</p>
                       <p className="text-xs text-muted-foreground">{bet.betType}</p>
+                      {liveStat && (
+                        <div className="mt-1">
+                          <LiveStatsBadge liveStat={liveStat} compact />
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">

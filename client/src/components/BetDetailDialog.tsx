@@ -40,6 +40,7 @@ interface Bet {
   notes?: string | null;
   isFreePlay?: boolean | null;
   createdAt: Date | string;
+  gameStartTime?: Date | string | null;
   settledAt?: Date | string | null;
 }
 
@@ -275,6 +276,15 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                   {format(new Date(bet.createdAt), "MMM dd, yyyy")}
                 </p>
               </div>
+
+              {bet.gameStartTime && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Game Time</p>
+                  <p className="text-lg font-semibold">
+                    {format(new Date(bet.gameStartTime), "MMM dd, yyyy h:mm a")}
+                  </p>
+                </div>
+              )}
 
               {bet.settledAt && (
                 <div>

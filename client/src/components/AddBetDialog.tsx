@@ -35,6 +35,7 @@ const betFormSchema = z.object({
   team: z.string().min(1, "Team/player is required"),
   openingOdds: z.string().min(1, "Opening odds are required"),
   stake: z.string().min(1, "Stake is required"),
+  gameStartTime: z.string().optional(),
   projectionSource: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -56,6 +57,7 @@ export function AddBetDialog({ open, onOpenChange, onSubmit }: AddBetDialogProps
       team: "",
       openingOdds: "",
       stake: "",
+      gameStartTime: "",
       projectionSource: "",
       notes: "",
     },
@@ -177,6 +179,24 @@ export function AddBetDialog({ open, onOpenChange, onSubmit }: AddBetDialogProps
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="gameStartTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Game Start Time (Optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="datetime-local"
+                        {...field}
+                        data-testid="input-game-start-time"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

@@ -55,6 +55,7 @@ interface BetDetailDialogProps {
 }
 
 export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle }: BetDetailDialogProps) {
+  const { toast } = useToast();
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
   const [editingClosingOdds, setEditingClosingOdds] = useState(false);
@@ -103,8 +104,6 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
     setLiveOddsInput(bet.liveOdds || bet.openingOdds);
     setEditingLiveOdds(true);
   };
-
-  const { toast } = useToast();
 
   const handleStartEditClosingOdds = () => {
     setClosingOddsInput(bet.closingOdds || bet.openingOdds);

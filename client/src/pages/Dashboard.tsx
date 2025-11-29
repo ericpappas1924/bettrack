@@ -218,8 +218,8 @@ export default function Dashboard() {
       projectionSource: bet.projectionSource || null,
       notes: bet.notes || null,
       isFreePlay: bet.isFreePlay || false,
-      gameStartTime: bet.gameStartTime || null,
-      settledAt: bet.settledAt || null,
+      gameStartTime: bet.gameStartTime ? new Date(bet.gameStartTime) : null,
+      settledAt: bet.settledAt ? new Date(bet.settledAt) : null,
     }));
     importMutation.mutate(formattedBets);
     setImportOpen(false);

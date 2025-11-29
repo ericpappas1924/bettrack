@@ -70,12 +70,15 @@ const fetchGamesForSport = memoize(
 
 /**
  * Normalize team name for matching
- * Removes common suffixes and converts to lowercase
+ * Removes common mascots/suffixes and converts to lowercase
  */
 function normalizeTeamName(team: string): string {
   return team
     .toLowerCase()
-    .replace(/\s+(tigers|lions|bears|eagles|cowboys|49ers|chiefs|packers|steelers|ravens|patriots)/gi, '')
+    // Remove common NFL mascots
+    .replace(/\s+(tigers|lions|bears|eagles|cowboys|49ers|chiefs|packers|steelers|ravens|patriots|cardinals|panthers|saints|rams|buccaneers|seahawks|raiders|chargers|broncos|jets|bills|dolphins|titans|jaguars|colts|texans|browns|bengals|giants|commanders|falcons)/gi, '')
+    // Remove common college mascots
+    .replace(/\s+(crimson tide|volunteers|bulldogs|wildcats|trojans|bruins|ducks|huskies|cougars|sun devils|golden bears|cardinal|utes|buffaloes|aggies|red raiders|longhorns|sooners|jayhawks|cyclones|mountaineers|horned frogs|gators|seminoles|hurricanes|tar heels|blue devils|wolfpack|cavaliers|hokies|yellow jackets|orange|fighting irish|badgers|hawkeyes|cornhuskers|nittany lions|spartans|wolverines|buckeyes|terrapins|scarlet knights|boilermakers|hoosiers|illini|golden gophers)/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -88,12 +91,22 @@ function matchesGame(game: OddsGame, matchup: string): boolean {
   const normalizedHome = normalizeTeamName(game.home_team);
   const normalizedAway = normalizeTeamName(game.away_team);
   
-  // Check if both teams are mentioned in the matchup
-  const hasHome = normalizedMatchup.includes(normalizedHome) || normalizedMatchup.includes(game.home_team.toLowerCase());
-  const hasAway = normalizedMatchup.includes(normalizedAway) || normalizedMatchup.includes(game.away_team.toLowerCase());
+  // Extract just the school/city names from the matchup (remove mascots)
+  const normalizedMatchupClean = normalizeTeamName(matchup);
   
-  // Also check for "vs" pattern
-  const vsPattern = normalizedMatchup.includes(' vs ');
+  // Check if both teams are mentioned in the matchup (with or without mascots)
+  const hasHome = normalizedMatchup.includes(normalizedHome) || 
+                  normalizedMatchupClean.includes(normalizedHome) ||
+                  normalizedHome.includes(normalizedMatchupClean.split(' vs ')[0]?.trim() || '') ||
+                  normalizedHome.includes(normalizedMatchupClean.split(' vs ')[1]?.trim() || '');
+                  
+  const hasAway = normalizedMatchup.includes(normalizedAway) || 
+                  normalizedMatchupClean.includes(normalizedAway) ||
+                  normalizedAway.includes(normalizedMatchupClean.split(' vs ')[0]?.trim() || '') ||
+                  normalizedAway.includes(normalizedMatchupClean.split(' vs ')[1]?.trim() || '');
+  
+  // Also check for "vs" or "@" pattern
+  const vsPattern = normalizedMatchup.includes(' vs ') || normalizedMatchup.includes(' @ ');
   
   return vsPattern && hasHome && hasAway;
 }

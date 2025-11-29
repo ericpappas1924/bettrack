@@ -160,3 +160,69 @@ export async function batchFindGameStartTimes(
   return results;
 }
 
+/**
+ * Find closing odds for a bet
+ * For games that have started/finished, current odds are the "closing" odds
+ * @param matchup - Game matchup string
+ * @param sport - Sport code
+ * @param betType - Type of bet (e.g., "h2h" for moneyline, "spreads", "totals")
+ * @param team - Team name to find odds for
+ * @returns Closing odds in American format or null if not found
+ */
+export async function findClosingOdds(
+  matchup: string, 
+  sport: string, 
+  betType: string = 'h2h',
+  team?: string
+): Promise<number | null> {
+  const sportKey = SPORT_MAP[sport];
+  
+  if (!sportKey) {
+    console.log(`No Odds API mapping for sport: ${sport}`);
+    return null;
+  }
+
+  try {
+    const games = await fetchGamesForSport(sportKey);
+    
+    // Find matching game
+    const matchingGame = games.find(game => matchesGame(game, matchup));
+    
+    if (!matchingGame) {
+      console.log(`No matching game found for: ${matchup} in ${sport}`);
+      return null;
+    }
+
+    // The Odds API response includes bookmaker odds
+    // For a simple implementation, we'll just return that we found the game
+    // In a production system, you'd parse the bookmaker odds here
+    // For now, return null to indicate we need more specific implementation
+    console.log(`Found game for ${matchup}, but detailed odds parsing not yet implemented`);
+    return null;
+  } catch (error) {
+    console.error('Error finding closing odds:', error);
+    return null;
+  }
+}
+
+/**
+ * Calculate CLV (Closing Line Value) percentage
+ * @param openingOdds - Odds when bet was placed
+ * @param closingOdds - Odds at game time (or current odds)
+ * @returns CLV as percentage (positive is good)
+ */
+export function calculateCLV(openingOdds: number, closingOdds: number): number {
+  // Convert American odds to implied probability
+  const openingProb = openingOdds > 0 
+    ? 100 / (openingOdds + 100) 
+    : -openingOdds / (-openingOdds + 100);
+  
+  const closingProb = closingOdds > 0 
+    ? 100 / (closingOdds + 100) 
+    : -closingOdds / (-closingOdds + 100);
+  
+  // CLV is the difference in implied probability
+  // Positive CLV means you got better odds than closing
+  return ((openingProb - closingProb) / closingProb) * 100;
+}
+

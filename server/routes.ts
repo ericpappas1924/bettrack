@@ -231,5 +231,52 @@ export async function registerRoutes(
     }
   });
 
+  // Calculate CLV from closing odds
+  app.post("/api/bets/:id/calculate-clv", isAuthenticated, async (req: any, res) => {
+    try {
+      const { closingOdds } = z.object({ 
+        closingOdds: z.string() 
+      }).parse(req.body);
+      
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      // Calculate CLV
+      const openingOddsNum = parseFloat(existingBet.openingOdds);
+      const closingOddsNum = parseFloat(closingOdds);
+      
+      // Convert to implied probability
+      const openingProb = openingOddsNum > 0 
+        ? 100 / (openingOddsNum + 100) 
+        : -openingOddsNum / (-openingOddsNum + 100);
+      
+      const closingProb = closingOddsNum > 0 
+        ? 100 / (closingOddsNum + 100) 
+        : -closingOddsNum / (-closingOddsNum + 100);
+      
+      // CLV = (opening prob - closing prob) / closing prob * 100
+      const clv = ((openingProb - closingProb) / closingProb) * 100;
+      
+      const bet = await storage.updateBet(req.params.id, {
+        closingOdds,
+        clv: clv.toFixed(2),
+      });
+      
+      res.json(bet);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      console.error("Error calculating CLV:", error);
+      res.status(500).json({ error: "Failed to calculate CLV" });
+    }
+  });
+
   return httpServer;
 }

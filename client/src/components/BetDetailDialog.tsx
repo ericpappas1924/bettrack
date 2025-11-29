@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format } from "date-fns";
-import { Edit2, Check, X, Trophy, ThumbsDown, Minus } from "lucide-react";
+import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
@@ -55,6 +57,9 @@ interface BetDetailDialogProps {
 export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle }: BetDetailDialogProps) {
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
+  const [editingClosingOdds, setEditingClosingOdds] = useState(false);
+  const [closingOddsInput, setClosingOddsInput] = useState("");
+  const [calculating, setCalculating] = useState(false);
 
   if (!bet) return null;
 
@@ -97,6 +102,40 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
   const handleStartEditLiveOdds = () => {
     setLiveOddsInput(bet.liveOdds || bet.openingOdds);
     setEditingLiveOdds(true);
+  };
+
+  const { toast } = useToast();
+
+  const handleStartEditClosingOdds = () => {
+    setClosingOddsInput(bet.closingOdds || bet.openingOdds);
+    setEditingClosingOdds(true);
+  };
+
+  const handleSaveClosingOdds = async () => {
+    if (!closingOddsInput) return;
+    
+    setCalculating(true);
+    try {
+      await apiRequest("POST", `/api/bets/${bet.id}/calculate-clv`, {
+        closingOdds: closingOddsInput
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "CLV calculated",
+        description: "Closing odds and CLV have been updated",
+      });
+      setEditingClosingOdds(false);
+      setClosingOddsInput("");
+    } catch (error) {
+      toast({
+        title: "Failed to calculate CLV",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setCalculating(false);
+    }
   };
 
   return (
@@ -223,7 +262,45 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
 
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Closing Odds</p>
-                <p className="text-lg font-semibold tabular-nums">{formatOdds(bet.closingOdds)}</p>
+                {editingClosingOdds ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      value={closingOddsInput}
+                      onChange={(e) => setClosingOddsInput(e.target.value)}
+                      placeholder="-110"
+                      className="w-24"
+                      data-testid="input-closing-odds"
+                    />
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={handleSaveClosingOdds}
+                      disabled={calculating}
+                    >
+                      {calculating ? <Calculator className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost" 
+                      onClick={() => setEditingClosingOdds(false)}
+                      disabled={calculating}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-semibold tabular-nums">{formatOdds(bet.closingOdds)}</p>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={handleStartEditClosingOdds}
+                      data-testid="button-edit-closing-odds"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div>

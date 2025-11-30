@@ -399,22 +399,58 @@ export async function registerRoutes(
       }
       
       // Try to find current odds from Odds API
-      const { findClosingOdds, calculateCLV } = await import('./services/oddsApi');
+      const { findClosingOdds, findPlayerPropOdds, calculateCLV } = await import('./services/oddsApi');
       
       console.log(`\n🔍 Fetching current odds from Odds API...`);
-      const currentOdds = await findClosingOdds(
-        existingBet.game,
-        existingBet.sport,
-        'h2h',
-        existingBet.team
-      );
+      console.log(`Bet Type: ${existingBet.betType}`);
+      
+      let currentOdds: number | null = null;
+      
+      // Check if this is a player prop
+      if (existingBet.betType === 'Player Prop') {
+        console.log(`📊 Detected player prop - using event-based API`);
+        
+        // Parse player prop details from team field
+        // Format: "Team1 vs Team2 Player Name Over/Under X.X Stat Type"
+        const propMatch = existingBet.team.match(/(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)/i);
+        
+        if (propMatch) {
+          const playerName = propMatch[1].trim();
+          const isOver = propMatch[2].toLowerCase() === 'over';
+          const statType = propMatch[4].trim();
+          
+          console.log(`   Player: ${playerName}`);
+          console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);
+          console.log(`   Stat Type: ${statType}`);
+          
+          currentOdds = await findPlayerPropOdds(
+            existingBet.game,
+            existingBet.sport,
+            playerName,
+            statType,
+            isOver
+          );
+        } else {
+          console.log(`⚠️  Could not parse player prop details from: "${existingBet.team}"`);
+        }
+      } else {
+        // Straight bet (moneyline, spread, total)
+        console.log(`📊 Straight bet - using standard odds endpoint`);
+        currentOdds = await findClosingOdds(
+          existingBet.game,
+          existingBet.sport,
+          'h2h',
+          existingBet.team
+        );
+      }
       
       if (!currentOdds) {
         console.log(`❌ Could not find odds for this game`);
         console.log(`   This could be because:`);
         console.log(`   - Game is not available in Odds API yet`);
-        console.log(`   - Team name doesn't match API format`);
+        console.log(`   - Team/Player name doesn't match API format`);
         console.log(`   - Game has already finished`);
+        console.log(`   - Player prop not offered by bookmakers`);
         console.log(`========== AUTO-FETCH CLV COMPLETE ==========\n`);
         
         return res.status(404).json({ 
@@ -454,6 +490,90 @@ export async function registerRoutes(
     } catch (error) {
       console.error("\n❌ Error auto-fetching CLV:", error);
       res.status(500).json({ error: "Failed to auto-fetch CLV" });
+    }
+  });
+
+  // Admin endpoint to query database stats (development only)
+  app.get("/api/admin/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      // Get all users
+      const allUsers = await storage.getAllUsers();
+      
+      // Get all bets for the current user
+      const userId = req.user.claims.sub;
+      const userBets = await storage.getAllBets(userId);
+      
+      // Calculate stats
+      const active = userBets.filter(b => b.status === 'active').length;
+      const settled = userBets.filter(b => b.status === 'settled').length;
+      const won = userBets.filter(b => b.result === 'won').length;
+      const lost = userBets.filter(b => b.result === 'lost').length;
+      const push = userBets.filter(b => b.result === 'push').length;
+      
+      const totalStake = userBets.reduce((sum, b) => sum + parseFloat(b.stake || '0'), 0);
+      const totalProfit = userBets.reduce((sum, b) => sum + parseFloat(b.profit || '0'), 0);
+      
+      // Sport breakdown
+      const sportCounts = userBets.reduce((acc, bet) => {
+        acc[bet.sport] = (acc[bet.sport] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Bet type breakdown
+      const betTypeCounts = userBets.reduce((acc, bet) => {
+        acc[bet.betType] = (acc[bet.betType] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // CLV stats
+      const betsWithCLV = userBets.filter(b => b.clv);
+      const avgCLV = betsWithCLV.length > 0
+        ? betsWithCLV.reduce((sum, b) => sum + parseFloat(b.clv!), 0) / betsWithCLV.length
+        : 0;
+      const positiveCLV = betsWithCLV.filter(b => parseFloat(b.clv!) > 0).length;
+      
+      res.json({
+        user: {
+          id: userId,
+          totalBets: userBets.length,
+        },
+        stats: {
+          active,
+          settled,
+          won,
+          lost,
+          push,
+          totalStake: totalStake.toFixed(2),
+          totalProfit: totalProfit.toFixed(2),
+        },
+        sports: sportCounts,
+        betTypes: betTypeCounts,
+        clv: {
+          calculated: betsWithCLV.length,
+          average: avgCLV.toFixed(2),
+          positive: positiveCLV,
+          positivePercentage: betsWithCLV.length > 0 
+            ? ((positiveCLV / betsWithCLV.length) * 100).toFixed(1)
+            : '0',
+        },
+        recentBets: userBets.slice(0, 10).map(bet => ({
+          id: bet.id,
+          game: bet.game,
+          team: bet.team,
+          sport: bet.sport,
+          betType: bet.betType,
+          stake: bet.stake,
+          status: bet.status,
+          result: bet.result,
+          profit: bet.profit,
+          clv: bet.clv,
+          expectedValue: bet.expectedValue,
+          createdAt: bet.createdAt,
+        })),
+      });
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+      res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
 

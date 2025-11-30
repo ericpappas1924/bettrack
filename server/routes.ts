@@ -411,13 +411,22 @@ export async function registerRoutes(
         console.log(`📊 Detected player prop - using event-based API`);
         
         // Parse player prop details from team field
-        // Format: "Team1 vs Team2 Player Name Over/Under X.X Stat Type"
+        // Format: "Game vs Teams Player Name Over/Under X.X Stat Type"
         const propMatch = existingBet.team.match(/(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)/i);
         
         if (propMatch) {
-          const playerName = propMatch[1].trim();
+          let playerName = propMatch[1].trim();
           const isOver = propMatch[2].toLowerCase() === 'over';
           const statType = propMatch[4].trim();
+          
+          // Strip out game matchup if it's included in player name
+          // Remove anything that looks like "Team1 vs Team2" from the start
+          if (existingBet.game && playerName.includes(existingBet.game)) {
+            playerName = playerName.replace(existingBet.game, '').trim();
+          } else {
+            // Try to remove any "X vs Y" pattern from the start
+            playerName = playerName.replace(/^.+?\s+vs\s+.+?\s+/, '').trim();
+          }
           
           console.log(`   Player: ${playerName}`);
           console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);

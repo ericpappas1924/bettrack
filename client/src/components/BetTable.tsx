@@ -379,7 +379,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     {formatCurrency(bet.profit)}
                   </TableCell>
                   <TableCell>
-                    {bet.status === "active" && !bet.clv && (
+                    {bet.status === "active" && (
                       <div className="flex items-center gap-1">
                         {bet.clvFetchError && (
                           <TooltipProvider>
@@ -403,7 +403,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                               onFetchCLV(bet.id);
                             }}
                             disabled={fetchingCLV.has(bet.id)}
-                            title="Fetch current CLV"
+                            title={bet.clv ? "Re-fetch CLV" : "Fetch current CLV"}
                           >
                             <RefreshCw className={`h-4 w-4 ${fetchingCLV.has(bet.id) ? 'animate-spin' : ''}`} />
                           </Button>

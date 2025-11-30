@@ -419,16 +419,40 @@ export async function registerRoutes(
           const isOver = propMatch[2].toLowerCase() === 'over';
           const statType = propMatch[4].trim();
           
-          // Strip out game matchup if it's included in player name
-          // Remove anything that looks like "Team1 vs Team2" from the start
-          if (existingBet.game && playerName.includes(existingBet.game)) {
+          console.log(`   Raw player extraction: "${playerName}"`);
+          
+          // Strategy 1: Exact game match - replace it
+          if (existingBet.game && playerName.startsWith(existingBet.game)) {
             playerName = playerName.replace(existingBet.game, '').trim();
-          } else {
-            // Try to remove any "X vs Y" pattern from the start
-            playerName = playerName.replace(/^.+?\s+vs\s+.+?\s+/, '').trim();
+            console.log(`   Cleaned (exact match): "${playerName}"`);
+          }
+          // Strategy 2: Filter out team words from the game string
+          else if (existingBet.game && playerName.includes(' vs ')) {
+            const gameWords = existingBet.game.toLowerCase().split(/\s+/);
+            const teamWords = new Set(gameWords.filter(w => w !== 'vs' && w.length > 2));
+            const gameLower = existingBet.game.toLowerCase();
+            
+            const words = playerName.split(/\s+/);
+            const cleanWords: string[] = [];
+            
+            for (const word of words) {
+              const wordLower = word.toLowerCase();
+              // Skip "vs"
+              if (wordLower === 'vs') continue;
+              // Skip exact team word matches
+              if (teamWords.has(wordLower)) continue;
+              // Skip short words that are substrings of the game (like "Ers" in "49Ers")
+              if (gameLower.includes(wordLower) && wordLower.length <= 4) continue;
+              cleanWords.push(word);
+            }
+            
+            if (cleanWords.length > 0) {
+              playerName = cleanWords.join(' ');
+              console.log(`   Cleaned (filter words): "${playerName}"`);
+            }
           }
           
-          console.log(`   Player: ${playerName}`);
+          console.log(`   Final Player: ${playerName}`);
           console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);
           console.log(`   Stat Type: ${statType}`);
           

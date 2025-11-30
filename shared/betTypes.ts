@@ -170,25 +170,42 @@ export function getSportFromText(text: string): Sport {
     'STOLEN BASE', 'TOTAL BASE', 'INNING', 'PITCH'
   ];
   
+  // Check NFL teams first (most specific)
+  const nflTeams = [
+    'BILLS', 'DOLPHINS', 'PATRIOTS', 'JETS', // AFC East
+    'RAVENS', 'BENGALS', 'BROWNS', 'STEELERS', // AFC North
+    'TEXANS', 'COLTS', 'JAGUARS', 'TITANS', // AFC South
+    'BRONCOS', 'CHIEFS', 'RAIDERS', 'CHARGERS', // AFC West
+    'COWBOYS', 'GIANTS', 'EAGLES', 'COMMANDERS', // NFC East (formerly Redskins/Washington)
+    'BEARS', 'LIONS', 'PACKERS', 'VIKINGS', // NFC North
+    'FALCONS', 'PANTHERS', 'SAINTS', 'BUCCANEERS', // NFC South
+    'CARDINALS', '49ERS', 'RAMS', 'SEAHAWKS', // NFC West
+    'SAN FRANCISCO', 'LOS ANGELES', 'LAS VEGAS', 'NEW YORK', 'NEW ENGLAND',
+    'NEW ORLEANS', 'TAMPA BAY', 'KANSAS CITY', 'GREEN BAY'
+  ];
+  
+  if (nflTeams.some(team => upper.includes(team))) return SPORTS.NFL;
+  
   // Check for football (NFL or NCAAF based on context)
   if (footballKeywords.some(keyword => upper.includes(keyword))) {
     // Try to determine if it's college or pro
     if (upper.includes('COLLEGE') || upper.includes('NCAA')) return SPORTS.NCAAF;
     
-    // Check for common NCAAF teams
+    // Check for common NCAAF teams (unique ones that don't conflict with NFL)
     const ncaafTeams = [
-      'OHIO STATE', 'MICHIGAN', 'ALABAMA', 'GEORGIA', 'LSU', 'CLEMSON',
-      'NOTRE DAME', 'USC', 'UCLA', 'PENN STATE', 'OREGON', 'FLORIDA',
-      'TEXAS', 'OKLAHOMA', 'AUBURN', 'TENNESSEE', 'FLORIDA STATE',
-      'MIAMI', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
+      'OHIO STATE', 'MICHIGAN WOLVERINES', 'ALABAMA', 'GEORGIA BULLDOGS', 'LSU', 'CLEMSON',
+      'NOTRE DAME', 'UCLA', 'PENN STATE', 'OREGON DUCKS', 'FLORIDA GATORS',
+      'TEXAS LONGHORNS', 'OKLAHOMA SOONERS', 'AUBURN', 'TENNESSEE VOLUNTEERS', 'FLORIDA STATE',
+      'MIAMI HURRICANES', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
       'SOUTH CAROLINA', 'NORTH CAROLINA', 'VIRGINIA TECH', 'VIRGINIA',
-      'BAYLOR', 'HOUSTON', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
-      'WASHINGTON', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
+      'BAYLOR', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
+      'WASHINGTON HUSKIES', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
       'KENTUCKY', 'VANDERBILT', 'MISSISSIPPI', 'OLE MISS', 'MISS STATE',
       'ARKANSAS', 'MISSOURI', 'TEXAS A&M', 'NC STATE', 'DUKE', 'WAKE FOREST',
       'BOSTON COLLEGE', 'SYRACUSE', 'PITT', 'LOUISVILLE', 'RUTGERS',
-      'MARYLAND', 'MINNESOTA', 'PURDUE', 'ILLINOIS', 'INDIANA',
-      'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO', 'UTAH', 'BYU'
+      'PURDUE', 'ILLINOIS', 'INDIANA',
+      'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO BUFFALOES', 'UTAH', 'BYU',
+      'UCF KNIGHTS', 'USC TROJANS', 'MIAMI HURRICANES'
     ];
     
     if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;

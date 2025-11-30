@@ -347,8 +347,12 @@ export function parseBetPaste(rawText: string): ParseResult {
         const propDetails = extractPlayerPropDetails(block);
         game = propDetails.game;
         description = propDetails.description;
-        // Re-detect sport in case it wasn't detected earlier
-        sport = getSportFromText(block);
+        // Re-detect sport by checking the game matchup first, then the block
+        sport = game ? getSportFromText(game) : getSportFromText(block);
+        // If still OTHER, try the whole block
+        if (sport === 'Other') {
+          sport = getSportFromText(block);
+        }
       } else if (betType === 'Parlay') {
         const parlayDetails = extractParlayDetails(block);
         legs = parlayDetails.legs;
@@ -441,6 +445,105 @@ export function parseBetPaste(rawText: string): ParseResult {
   return { bets, errors };
 }
 
+// NFL team code mappings
+const NFL_TEAM_CODES: Record<string, string[]> = {
+  'SF': ['San Francisco', '49ers', '49Ers'],
+  'CLE': ['Cleveland', 'Browns'],
+  'KC': ['Kansas City', 'Chiefs'],
+  'BAL': ['Baltimore', 'Ravens'],
+  'DAL': ['Dallas', 'Cowboys'],
+  'BUF': ['Buffalo', 'Bills'],
+  'PIT': ['Pittsburgh', 'Steelers'],
+  'NYG': ['New York Giants', 'Giants'],
+  'NE': ['New England', 'Patriots'],
+  'NYJ': ['New York Jets', 'Jets'],
+  'MIA': ['Miami', 'Dolphins'],
+  'NOS': ['New Orleans', 'Saints'],
+  'ATL': ['Atlanta', 'Falcons'],
+  'LAR': ['Los Angeles Rams', 'LA Rams', 'Rams'],
+  'LAC': ['Los Angeles Chargers', 'Chargers'],
+  'LVR': ['Las Vegas', 'Raiders'],
+  'DEN': ['Denver', 'Broncos'],
+  'SEA': ['Seattle', 'Seahawks'],
+  'MIN': ['Minnesota', 'Vikings'],
+  'HOU': ['Houston', 'Texans'],
+  'IND': ['Indianapolis', 'Colts'],
+  'JAX': ['Jacksonville', 'Jaguars'],
+  'TEN': ['Tennessee', 'Titans'],
+  'CAR': ['Carolina', 'Panthers'],
+  'TB': ['Tampa Bay', 'Buccaneers'],
+  'ARI': ['Arizona', 'Cardinals'],
+  'CHI': ['Chicago', 'Bears'],
+  'PHI': ['Philadelphia', 'Eagles'],
+  'GB': ['Green Bay', 'Packers'],
+  'DET': ['Detroit', 'Lions'],
+  'CIN': ['Cincinnati', 'Bengals'],
+  'WAS': ['Washington', 'Commanders'],
+};
+
+function findTeamInGame(teamCode: string, game: string): string | null {
+  if (!game || !game.includes(' vs ')) return null;
+  
+  const teams = game.split(' vs ');
+  const possibleNames = NFL_TEAM_CODES[teamCode] || [];
+  
+  for (const team of teams) {
+    const teamLower = team.toLowerCase();
+    // Check if any of the possible names match this team
+    for (const name of possibleNames) {
+      if (teamLower.includes(name.toLowerCase())) {
+        return team.trim();
+      }
+    }
+  }
+  
+  return null;
+}
+
+function extractTeamFromBet(parsed: ParsedBet): string {
+  // For player props, extract the player's team from the description
+  // Format: "George Kittle (SF) Under 5.5 Receptions"
+  if (parsed.betType === 'Player Prop' && parsed.description) {
+    const teamCodeMatch = parsed.description.match(/\(([A-Z]{2,4})\)/);
+    if (teamCodeMatch) {
+      const teamCode = teamCodeMatch[1];
+      
+      // Try to find the full team name in the game matchup
+      const teamName = findTeamInGame(teamCode, parsed.game);
+      if (teamName) {
+        return teamName;
+      }
+      
+      // If not found, extract just the player name and team code
+      const playerMatch = parsed.description.match(/^([A-Za-z\s'\.]+)\s*\([A-Z]{2,4}\)/);
+      if (playerMatch) {
+        return `${playerMatch[1].trim()} (${teamCode})`;
+      }
+    }
+    
+    // Fallback: extract just the player name if no team code
+    const playerMatch = parsed.description.match(/^([A-Za-z\s'\.]+?)\s+(Over|Under)/i);
+    if (playerMatch) {
+      return playerMatch[1].trim();
+    }
+  }
+  
+  // For straight bets, extract just the team name without odds
+  if (parsed.betType === 'Straight' && parsed.description) {
+    // Remove odds notation: "KC CHIEFS -185" -> "KC CHIEFS"
+    const cleanTeam = parsed.description.replace(/\s*[+-][\d½¼]+.*$/, '').trim();
+    return cleanTeam || parsed.description;
+  }
+  
+  // For parlays, extract meaningful description
+  if (parsed.betType === 'Parlay' && parsed.legs && parsed.legs.length > 0) {
+    return `${parsed.legs.length}-Team Parlay`;
+  }
+  
+  // For live bets or other types, use the game
+  return parsed.game || parsed.description || 'Unknown';
+}
+
 export function convertToAppBet(parsed: ParsedBet) {
   // Build notes with additional context
   let notes = '';
@@ -457,11 +560,14 @@ export function convertToAppBet(parsed: ParsedBet) {
     notes = notes ? `${notes}\nCategory: ${parsed.category}` : `Category: ${parsed.category}`;
   }
   
+  // Extract the proper team name
+  const team = extractTeamFromBet(parsed);
+  
   return {
     id: parsed.id,
     sport: parsed.sport,
     betType: parsed.betType,
-    team: parsed.description || parsed.game,
+    team: team,
     game: parsed.game,
     openingOdds: parsed.odds.toString(),
     liveOdds: parsed.isLive ? parsed.odds.toString() : null,

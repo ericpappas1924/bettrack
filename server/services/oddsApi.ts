@@ -187,20 +187,52 @@ export async function findPlayerPropOdds(
   console.log(`✅ Found matching event: ${matchingEvent.away_team} @ ${matchingEvent.home_team}`);
   console.log(`   Event ID: ${matchingEvent.id}`);
 
-  // Step 3: Map stat type to API market
+  // Step 3: Map stat type to API market (sport-specific)
   const marketMap: Record<string, string> = {
+    // NFL/NCAAF
     'passing yards': 'player_pass_yds',
     'pass completions': 'player_pass_completions',
     'rushing yards': 'player_rush_yds',
     'receiving yards': 'player_reception_yds',
     'receptions': 'player_receptions',
-    'carries': 'player_rush_yds', // Use rush yards as proxy
+    'carries': 'player_rush_yds',
+    
+    // NBA/NCAAB
+    'points': 'player_points',
+    'rebounds': 'player_rebounds',
+    'assists': 'player_assists',
+    'threes': 'player_threes',
+    '3-pointers': 'player_threes',
+    'steals': 'player_steals',
+    'blocks': 'player_blocks',
+    'turnovers': 'player_turnovers',
+    'pra': 'player_points_rebounds_assists',
+    'points+rebounds+assists': 'player_points_rebounds_assists',
+    
+    // MLB
+    'strikeouts': 'pitcher_strikeouts',
+    'hits': 'batter_hits',
+    'home runs': 'batter_home_runs',
+    'rbis': 'batter_rbis',
+    'total bases': 'batter_total_bases',
   };
 
   const market = marketMap[statType.toLowerCase()];
   if (!market) {
     console.log(`❌ Stat type "${statType}" not supported`);
-    console.log(`   Supported: ${Object.keys(marketMap).join(', ')}`);
+    console.log(`   Supported for ${sport}:`);
+    
+    // Show sport-specific markets
+    if (sport === 'NBA' || sport === 'NCAAB') {
+      console.log(`   Basketball: points, rebounds, assists, threes, steals, blocks, turnovers, pra`);
+    } else if (sport === 'NFL' || sport === 'NCAAF') {
+      console.log(`   Football: passing yards, pass completions, rushing yards, receiving yards, receptions, carries`);
+    } else if (sport === 'MLB') {
+      console.log(`   Baseball: strikeouts, hits, home runs, rbis, total bases`);
+    } else {
+      console.log(`   ${Object.keys(marketMap).join(', ')}`);
+    }
+    
     return null;
   }
 

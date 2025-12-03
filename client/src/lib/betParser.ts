@@ -179,31 +179,35 @@ function extractPlayerPropDetails(block: string): { game: string; description: s
     }
   }
   
-  const propPatterns = [
-    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
-    /([A-Za-z\s'\.]+)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
-    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*([\d\.]+\+)\s+([A-Za-z\s]+?)(?=\n|Pending|$)/i,
-  ];
-  
+  // NEW APPROACH: Find the line that has Over/Under (the prop line)
+  // This line should have the player name, team code in parens, Over/Under, line, and stat
   let description = '';
-  for (const pattern of propPatterns) {
-    const match = block.match(pattern);
-    if (match) {
-      if (match[4]) {
-        description = `${match[1].trim()} ${match[2]} ${match[3]} ${match[4].trim()}`;
-      } else if (match[3]) {
-        description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
-      }
-      description = description.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+  
+  for (const line of lines) {
+    // Look for the player prop line (has Over/Under but not the game matchup "vs")
+    if (line.match(/Over|Under/i) && !line.includes(' vs ')) {
+      description = line;
       break;
     }
   }
   
-  if (!description && game) {
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
-    for (const line of lines) {
-      if (line.match(/Over|Under/i) && !line.includes('vs')) {
-        description = line.replace(/\([A-Z]+\)/, '').trim();
+  // Fallback to regex patterns if the simple approach didn't work
+  if (!description) {
+    const propPatterns = [
+      /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+      /([A-Za-z\s'\.]+)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+      /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*([\d\.]+\+)\s+([A-Za-z\s]+?)(?=\n|Pending|$)/i,
+    ];
+    
+    for (const pattern of propPatterns) {
+      const match = block.match(pattern);
+      if (match) {
+        if (match[4]) {
+          description = `${match[1].trim()} ${match[2]} ${match[3]} ${match[4].trim()}`;
+        } else if (match[3]) {
+          description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
+        }
+        description = description.replace(/\n/g, ' ').replace(/\s+/g, ' ');
         break;
       }
     }

@@ -19,6 +19,12 @@ export interface ParsedBet {
   league?: string;
   gameStartTime?: Date | null;
   parseWarnings?: string[];
+  // Player prop structured fields
+  player?: string;
+  playerTeam?: string;
+  market?: string;
+  overUnder?: 'Over' | 'Under';
+  line?: string;
 }
 
 export interface ParseResult {
@@ -167,7 +173,15 @@ function extractStraightBetDetails(block: string): { game: string; description: 
   return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block), gameStartTime: null };
 }
 
-function extractPlayerPropDetails(block: string): { game: string; description: string } {
+function extractPlayerPropDetails(block: string): { 
+  game: string; 
+  description: string;
+  player?: string;
+  playerTeam?: string;
+  market?: string;
+  overUnder?: 'Over' | 'Under';
+  line?: string;
+} {
   // Find the line with "vs" that doesn't contain parentheses (the game line)
   const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   let game = '';
@@ -179,14 +193,41 @@ function extractPlayerPropDetails(block: string): { game: string; description: s
     }
   }
   
-  // NEW APPROACH: Find the line that has Over/Under (the prop line)
-  // This line should have the player name, team code in parens, Over/Under, line, and stat
+  // Find the line that has Over/Under (the prop line)
+  // Format: "Jay Huff (IND) Over 11.5 Points"
   let description = '';
+  let player: string | undefined;
+  let playerTeam: string | undefined;
+  let market: string | undefined;
+  let overUnder: 'Over' | 'Under' | undefined;
+  let line: string | undefined;
   
-  for (const line of lines) {
+  for (const propLine of lines) {
     // Look for the player prop line (has Over/Under but not the game matchup "vs")
-    if (line.match(/Over|Under/i) && !line.includes(' vs ')) {
-      description = line;
+    if (propLine.match(/Over|Under/i) && !propLine.includes(' vs ')) {
+      description = propLine;
+      
+      // Parse structured fields from the prop line
+      // Pattern: "Player Name (TEAM) Over/Under X.X Stat Type"
+      const propMatch = propLine.match(/^(.+?)\s*\(([A-Z]{2,4})\)\s+(Over|Under)\s+([\d.]+)\s+(.+)$/i);
+      
+      if (propMatch) {
+        player = propMatch[1].trim();
+        playerTeam = propMatch[2].trim();
+        overUnder = propMatch[3].charAt(0).toUpperCase() + propMatch[3].slice(1).toLowerCase() as 'Over' | 'Under';
+        line = propMatch[4].trim();
+        market = propMatch[5].trim();
+      } else {
+        // Try without team code in parens
+        const simpleMatch = propLine.match(/^(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)$/i);
+        if (simpleMatch) {
+          player = simpleMatch[1].trim();
+          overUnder = simpleMatch[2].charAt(0).toUpperCase() + simpleMatch[2].slice(1).toLowerCase() as 'Over' | 'Under';
+          line = simpleMatch[3].trim();
+          market = simpleMatch[4].trim();
+        }
+      }
+      
       break;
     }
   }
@@ -213,7 +254,7 @@ function extractPlayerPropDetails(block: string): { game: string; description: s
     }
   }
   
-  return { game, description: description || game };
+  return { game, description: description || game, player, playerTeam, market, overUnder, line };
 }
 
 function extractParlayDetails(block: string): { legs: string[]; description: string; gameStartTime: Date | null } {
@@ -333,6 +374,11 @@ export function parseBetPaste(rawText: string): ParseResult {
       let gameId: string | undefined;
       let league: string | undefined;
       let gameStartTime: Date | null = null;
+      let player: string | undefined;
+      let playerTeam: string | undefined;
+      let market: string | undefined;
+      let overUnder: 'Over' | 'Under' | undefined;
+      let line: string | undefined;
       
       // Handle live betting bets (especially esports)
       if (isLive) {
@@ -351,6 +397,11 @@ export function parseBetPaste(rawText: string): ParseResult {
         const propDetails = extractPlayerPropDetails(block);
         game = propDetails.game;
         description = propDetails.description;
+        player = propDetails.player;
+        playerTeam = propDetails.playerTeam;
+        market = propDetails.market;
+        overUnder = propDetails.overUnder;
+        line = propDetails.line;
         // Re-detect sport by checking the game matchup first, then the block
         sport = game ? getSportFromText(game) : getSportFromText(block);
         // If still OTHER, try the whole block
@@ -424,7 +475,13 @@ export function parseBetPaste(rawText: string): ParseResult {
         gameId,
         league,
         gameStartTime,
-        parseWarnings: warnings.length > 0 ? warnings : undefined
+        parseWarnings: warnings.length > 0 ? warnings : undefined,
+        // Player prop structured fields
+        player,
+        playerTeam,
+        market,
+        overUnder,
+        line,
       });
       
     } catch (e) {
@@ -595,5 +652,11 @@ export function convertToAppBet(parsed: ParsedBet) {
     createdAt: parsed.date,
     gameStartTime: parsed.gameStartTime || null,
     settledAt: parsed.status !== 'pending' ? new Date() : null,
+    // Player prop structured fields
+    player: parsed.player || null,
+    playerTeam: parsed.playerTeam || null,
+    market: parsed.market || null,
+    overUnder: parsed.overUnder || null,
+    line: parsed.line || null,
   };
 }

@@ -436,17 +436,37 @@ export async function registerRoutes(
       // Check if this is a player prop
       if (existingBet.betType === 'Player Prop') {
         console.log(`📊 Detected player prop - using event-based API`);
-        console.log(`📋 Team field contains: "${existingBet.team}"`);
-        console.log(`📋 Expected format: "Player Name (TEAM) Over/Under X.X Stat Type"`);
         
-        // Parse player prop details from team field
-        // Format: "Player Name (TEAM) Over/Under X.X Stat Type"
-        const propMatch = existingBet.team.match(/(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)/i);
-        
-        if (propMatch) {
-          let playerName = propMatch[1].trim();
-          const isOver = propMatch[2].toLowerCase() === 'over';
-          const statType = propMatch[4].trim();
+        // NEW: Use structured fields if available
+        if (existingBet.player && existingBet.market && existingBet.overUnder) {
+          console.log(`✅ Using structured player prop fields:`);
+          console.log(`   Player: ${existingBet.player}`);
+          console.log(`   Team: ${existingBet.playerTeam || 'N/A'}`);
+          console.log(`   Market: ${existingBet.market}`);
+          console.log(`   Direction: ${existingBet.overUnder}`);
+          console.log(`   Line: ${existingBet.line}`);
+          
+          const isOver = existingBet.overUnder === 'Over';
+          
+          currentOdds = await findPlayerPropOdds(
+            existingBet.game,
+            existingBet.sport,
+            existingBet.player,
+            existingBet.market,
+            isOver
+          );
+        } else {
+          // FALLBACK: Parse from team field (for older bets)
+          console.log(`⚠️  No structured fields - falling back to team field parsing`);
+          console.log(`📋 Team field contains: "${existingBet.team}"`);
+          console.log(`📋 Expected format: "Player Name (TEAM) Over/Under X.X Stat Type"`);
+          
+          const propMatch = existingBet.team.match(/(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)/i);
+          
+          if (propMatch) {
+            let playerName = propMatch[1].trim();
+            const isOver = propMatch[2].toLowerCase() === 'over';
+            const statType = propMatch[4].trim();
           
           console.log(`   Raw player extraction: "${playerName}"`);
           
@@ -485,15 +505,16 @@ export async function registerRoutes(
           console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);
           console.log(`   Stat Type: ${statType}`);
           
-          currentOdds = await findPlayerPropOdds(
-            existingBet.game,
-            existingBet.sport,
-            playerName,
-            statType,
-            isOver
-          );
-        } else {
-          console.log(`⚠️  Could not parse player prop details from: "${existingBet.team}"`);
+            currentOdds = await findPlayerPropOdds(
+              existingBet.game,
+              existingBet.sport,
+              playerName,
+              statType,
+              isOver
+            );
+          } else {
+            console.log(`⚠️  Could not parse player prop details from: "${existingBet.team}"`);
+          }
         }
       } else {
         // Straight bet (moneyline, spread, total)

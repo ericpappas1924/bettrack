@@ -52,6 +52,12 @@ export const bets = pgTable("bets", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   gameStartTime: timestamp("game_start_time"),
   settledAt: timestamp("settled_at"),
+  // Player prop specific fields
+  player: text("player"), // e.g., "Jay Huff"
+  playerTeam: text("player_team"), // e.g., "IND" or "Indiana Pacers"
+  market: text("market"), // e.g., "Points", "Rebounds", "Assists", "PRA"
+  overUnder: text("over_under"), // "Over" or "Under"
+  line: text("line"), // e.g., "11.5", "5.5"
 });
 
 export type UpsertUser = typeof users.$inferInsert;
@@ -73,6 +79,12 @@ export const insertBetSchema = createInsertSchema(bets).omit({
   clvLastAttempt: z.date().nullable().optional(),
   gameStartTime: z.date().nullable().optional(),
   settledAt: z.date().nullable().optional(),
+  // Player prop fields (optional)
+  player: z.string().nullable().optional(),
+  playerTeam: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  overUnder: z.enum(["Over", "Under"]).nullable().optional(),
+  line: z.string().nullable().optional(),
 });
 
 export const updateBetSchema = z.object({
@@ -87,6 +99,12 @@ export const updateBetSchema = z.object({
   clvLastAttempt: z.date().nullable().optional(),
   notes: z.string().optional(),
   settledAt: z.date().nullable().optional(),
+  // Player prop fields
+  player: z.string().nullable().optional(),
+  playerTeam: z.string().nullable().optional(),
+  market: z.string().nullable().optional(),
+  overUnder: z.enum(["Over", "Under"]).nullable().optional(),
+  line: z.string().nullable().optional(),
 });
 
 export type InsertBet = z.infer<typeof insertBetSchema>;

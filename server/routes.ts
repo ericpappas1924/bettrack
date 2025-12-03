@@ -436,9 +436,11 @@ export async function registerRoutes(
       // Check if this is a player prop
       if (existingBet.betType === 'Player Prop') {
         console.log(`📊 Detected player prop - using event-based API`);
+        console.log(`📋 Team field contains: "${existingBet.team}"`);
+        console.log(`📋 Expected format: "Player Name (TEAM) Over/Under X.X Stat Type"`);
         
         // Parse player prop details from team field
-        // Format: "Game vs Teams Player Name Over/Under X.X Stat Type"
+        // Format: "Player Name (TEAM) Over/Under X.X Stat Type"
         const propMatch = existingBet.team.match(/(.+?)\s+(Over|Under)\s+([\d.]+)\s+(.+)/i);
         
         if (propMatch) {

@@ -563,10 +563,10 @@ export function convertToAppBet(parsed: ParsedBet) {
   // Extract the proper team name
   const team = extractTeamFromBet(parsed);
   
-  // For player props, use the full description (includes Over/Under, line, stat)
+  // For player props, just use the description (includes player, Over/Under, line, stat)
   // For other bets, use the extracted team name
   const teamField = parsed.betType === 'Player Prop' && parsed.description 
-    ? `${parsed.game} ${parsed.description}`.trim()
+    ? parsed.description.trim()
     : team;
   
   return {

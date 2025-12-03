@@ -231,9 +231,26 @@ export function getSportFromText(text: string): Sport {
   const nflSuffixes = ['CHIEFS', 'COWBOYS', 'LIONS', 'PACKERS', 'BEARS', '49ERS'];
   if (nflSuffixes.some(suffix => upper.includes(suffix))) return SPORTS.NFL;
   
-  // NBA teams often have these suffixes
-  const nbaSuffixes = ['LAKERS', 'CELTICS', 'HEAT', 'WARRIORS', 'BULLS', 'KNICKS'];
-  if (nbaSuffixes.some(suffix => upper.includes(suffix))) return SPORTS.NBA;
+  // NBA teams (comprehensive list - all 30 teams)
+  const nbaTeams = [
+    // Eastern Conference - Atlantic
+    'CELTICS', 'NETS', 'KNICKS', '76ERS', 'SIXERS', 'RAPTORS',
+    // Eastern Conference - Central
+    'BUCKS', 'BULLS', 'CAVALIERS', 'CAVS', 'PISTONS', 'PACERS',
+    // Eastern Conference - Southeast
+    'HAWKS', 'HEAT', 'HORNETS', 'MAGIC', 'WIZARDS',
+    // Western Conference - Northwest
+    'NUGGETS', 'TIMBERWOLVES', 'THUNDER', 'TRAIL BLAZERS', 'BLAZERS', 'JAZZ',
+    // Western Conference - Pacific
+    'WARRIORS', 'CLIPPERS', 'LAKERS', 'SUNS', 'KINGS',
+    // Western Conference - Southwest
+    'MAVERICKS', 'ROCKETS', 'GRIZZLIES', 'PELICANS', 'SPURS',
+    // City names unique to NBA (helps catch "Denver Nuggets", "Indiana Pacers")
+    'DENVER', 'MILWAUKEE', 'CLEVELAND', 'INDIANA', 'ORLANDO', 'CHARLOTTE',
+    'MEMPHIS', 'SACRAMENTO', 'PORTLAND', 'PHOENIX', 'MINNESOTA',
+    'OKLAHOMA CITY', 'SAN ANTONIO', 'PHILADELPHIA'
+  ];
+  if (nbaTeams.some(team => upper.includes(team))) return SPORTS.NBA;
   
   // 6. Position indicators
   if (upper.match(/\b(QB|RB|WR|TE|DE|LB|CB|S)\b/)) return SPORTS.NFL;

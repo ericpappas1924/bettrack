@@ -8,7 +8,9 @@ import {
 } from "@/components/ui/dialog";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
+import { GameStatusBadge } from "./GameStatusBadge";
 import { Badge } from "@/components/ui/badge";
+import type { Sport } from "@shared/betTypes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -303,6 +305,16 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                 <p className="text-sm text-muted-foreground mb-1">Sport</p>
                 <Badge variant="secondary">{bet.sport}</Badge>
               </div>
+
+              {bet.gameStartTime && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Game Status</p>
+                  <GameStatusBadge 
+                    gameStartTime={bet.gameStartTime} 
+                    sport={bet.sport as Sport}
+                  />
+                </div>
+              )}
 
               {bet.game && (
                 <div>

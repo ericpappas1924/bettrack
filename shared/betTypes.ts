@@ -9,6 +9,7 @@ export const SPORTS = {
   NHL: 'NHL',
   NCAAF: 'NCAAF',
   NCAAB: 'NCAAB',
+  WNCAAB: 'WNCAAB', // Women's NCAA Basketball
   WNBA: 'WNBA',
   MLS: 'MLS',
   
@@ -284,5 +285,113 @@ export function extractOddsFromText(text: string): number | null {
   }
   
   return null;
+}
+
+// Game Status Types
+export const GAME_STATUS = {
+  PREGAME: 'pregame',
+  LIVE: 'live',
+  COMPLETED: 'completed',
+  UNKNOWN: 'unknown',
+} as const;
+
+export type GameStatus = typeof GAME_STATUS[keyof typeof GAME_STATUS];
+
+// Typical game durations in hours (including warmup, halftime, overtime buffer)
+export const SPORT_DURATIONS: Record<Sport, number> = {
+  [SPORTS.NFL]: 3.5,        // ~3.5 hours (including halftime and timeouts)
+  [SPORTS.NCAAF]: 3.5,      // College football similar to NFL
+  [SPORTS.NBA]: 2.5,        // ~2.5 hours (including timeouts and halftime)
+  [SPORTS.NCAAB]: 2.5,      // College basketball similar to NBA
+  [SPORTS.WNCAAB]: 2.5,     // Women's college basketball similar to men's
+  [SPORTS.WNBA]: 2.5,       // Similar to NBA
+  [SPORTS.MLB]: 3.0,        // Baseball averages ~3 hours
+  [SPORTS.NHL]: 2.5,        // Hockey ~2.5 hours
+  [SPORTS.MLS]: 2.0,        // Soccer ~2 hours (90 min + halftime + stoppage)
+  [SPORTS.CS2]: 2.0,        // CS2 matches typically 1-2 hours
+  [SPORTS.DOTA2]: 2.5,      // DOTA2 can be longer
+  [SPORTS.LOL]: 2.0,        // League of Legends ~1-2 hours
+  [SPORTS.VALORANT]: 2.0,   // Valorant matches ~1-2 hours
+  [SPORTS.MULTISPORT]: 3.0, // Default estimate
+  [SPORTS.OTHER]: 3.0,      // Default estimate
+};
+
+/**
+ * Calculate the estimated end time of a game based on start time and sport
+ */
+export function getGameEndTime(gameStartTime: Date | string | null, sport: Sport): Date | null {
+  if (!gameStartTime) return null;
+  
+  const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
+  if (isNaN(startTime.getTime())) return null;
+  
+  const durationHours = SPORT_DURATIONS[sport] || 3;
+  const endTime = new Date(startTime);
+  endTime.setHours(endTime.getHours() + durationHours);
+  
+  return endTime;
+}
+
+/**
+ * Determine the current status of a game based on its start time and sport
+ * Returns 'pregame', 'live', 'completed', or 'unknown'
+ */
+export function getGameStatus(gameStartTime: Date | string | null, sport: Sport): GameStatus {
+  if (!gameStartTime) return GAME_STATUS.UNKNOWN;
+  
+  const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
+  if (isNaN(startTime.getTime())) return GAME_STATUS.UNKNOWN;
+  
+  const now = new Date();
+  const endTime = getGameEndTime(startTime, sport);
+  
+  if (!endTime) return GAME_STATUS.UNKNOWN;
+  
+  // Game hasn't started yet
+  if (now < startTime) {
+    return GAME_STATUS.PREGAME;
+  }
+  
+  // Game has ended
+  if (now > endTime) {
+    return GAME_STATUS.COMPLETED;
+  }
+  
+  // Game is currently in progress
+  return GAME_STATUS.LIVE;
+}
+
+/**
+ * Get time until game starts (in minutes) - returns null if game has started or no time available
+ */
+export function getTimeUntilGame(gameStartTime: Date | string | null): number | null {
+  if (!gameStartTime) return null;
+  
+  const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
+  if (isNaN(startTime.getTime())) return null;
+  
+  const now = new Date();
+  if (now >= startTime) return null;
+  
+  const diffMs = startTime.getTime() - now.getTime();
+  return Math.floor(diffMs / (1000 * 60)); // Convert to minutes
+}
+
+/**
+ * Get estimated time remaining in game (in minutes) - returns null if game hasn't started or has ended
+ */
+export function getTimeRemaining(gameStartTime: Date | string | null, sport: Sport): number | null {
+  if (!gameStartTime) return null;
+  
+  const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
+  if (isNaN(startTime.getTime())) return null;
+  
+  const now = new Date();
+  const endTime = getGameEndTime(startTime, sport);
+  
+  if (!endTime || now < startTime || now > endTime) return null;
+  
+  const diffMs = endTime.getTime() - now.getTime();
+  return Math.floor(diffMs / (1000 * 60)); // Convert to minutes
 }
 

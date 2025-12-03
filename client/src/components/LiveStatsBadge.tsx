@@ -6,17 +6,33 @@ export interface LiveStat {
   betId: string;
   gameId: string;
   sport: string;
-  playerName: string;
-  statType: string;
-  targetValue: number;
-  currentValue: number;
-  isOver: boolean;
-  isHitting: boolean;
-  progress: number;
+  betType: string; // 'Straight' | 'Spread' | 'Total' | 'Player Prop'
+  
+  // Game info (all bets)
+  awayTeam: string;
+  homeTeam: string;
+  awayScore: number;
+  homeScore: number;
   gameStatus: string;
   isLive: boolean;
   isComplete: boolean;
-  lastUpdated: string;
+  status: 'winning' | 'losing' | 'pending';
+  currentScore?: string;
+  
+  // Team bet specific
+  betTeam?: string;
+  betLine?: number;
+  totalLine?: number;
+  isOver?: boolean;
+  
+  // Player prop specific
+  playerName?: string;
+  statType?: string;
+  targetValue?: number;
+  currentValue?: number;
+  progress?: number;
+  
+  lastUpdated: string | Date;
 }
 
 interface LiveStatsBadgeProps {
@@ -29,7 +45,10 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
     return null;
   }
 
-  const { currentValue, targetValue, isOver, isHitting, progress, gameStatus, isLive, isComplete, playerName, statType } = liveStat;
+  const { betType, currentValue, targetValue, isOver, progress, gameStatus, isLive, isComplete, playerName, statType, status, currentScore, awayTeam, homeTeam, awayScore, homeScore } = liveStat;
+  
+  // Determine if bet is hitting based on status
+  const isHitting = status === 'winning';
 
   // Determine badge color and icon
   let icon;
@@ -61,35 +80,86 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
     return Number.isInteger(value) ? value.toString() : value.toFixed(1);
   };
 
+  // Build tooltip content based on bet type
   const tooltipContent = (
     <div className="space-y-1 text-xs">
-      <p className="font-semibold">{playerName}</p>
-      <p className="text-muted-foreground">{statType}</p>
-      <div className="flex items-center justify-between gap-4">
-        <span>Current:</span>
-        <span className="font-medium">{formatStatValue(currentValue)}</span>
-      </div>
-      <div className="flex items-center justify-between gap-4">
-        <span>Target:</span>
-        <span className="font-medium">{isOver ? 'Over' : 'Under'} {formatStatValue(targetValue)}</span>
-      </div>
-      {isLive && (
+      {betType === 'Player Prop' ? (
+        // Player Prop tooltip
         <>
+          <p className="font-semibold">{playerName}</p>
+          <p className="text-muted-foreground">{statType}</p>
           <div className="flex items-center justify-between gap-4">
-            <span>Progress:</span>
-            <span className="font-medium">{progress}%</span>
+            <span>Current:</span>
+            <span className="font-medium">{currentValue !== undefined ? formatStatValue(currentValue) : '--'}</span>
           </div>
-          <div className="w-full bg-secondary rounded-full h-1.5 mt-1">
-            <div 
-              className={`h-1.5 rounded-full transition-all ${isHitting ? 'bg-green-500' : 'bg-amber-500'}`}
-              style={{ width: `${Math.min(100, progress)}%` }}
-            />
+          <div className="flex items-center justify-between gap-4">
+            <span>Target:</span>
+            <span className="font-medium">{isOver ? 'Over' : 'Under'} {targetValue !== undefined ? formatStatValue(targetValue) : '--'}</span>
+          </div>
+          {isLive && progress !== undefined && (
+            <>
+              <div className="flex items-center justify-between gap-4">
+                <span>Progress:</span>
+                <span className="font-medium">{progress}%</span>
+              </div>
+              <div className="w-full bg-secondary rounded-full h-1.5 mt-1">
+                <div 
+                  className={`h-1.5 rounded-full transition-all ${isHitting ? 'bg-green-500' : 'bg-amber-500'}`}
+                  style={{ width: `${Math.min(100, progress || 0)}%` }}
+                />
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        // Team Bet tooltip (Moneyline, Spread, Total)
+        <>
+          <p className="font-semibold">{betType === 'Spread' ? 'Spread Bet' : betType === 'Total' ? 'Total Bet' : 'Moneyline'}</p>
+          {currentScore && (
+            <div className="flex items-center justify-between gap-4">
+              <span>Score:</span>
+              <span className="font-medium">{currentScore}</span>
+            </div>
+          )}
+          {awayTeam && homeTeam && (
+            <div className="flex items-center justify-between gap-4">
+              <span>{awayTeam}:</span>
+              <span className="font-medium">{awayScore}</span>
+            </div>
+          )}
+          {awayTeam && homeTeam && (
+            <div className="flex items-center justify-between gap-4">
+              <span>{homeTeam}:</span>
+              <span className="font-medium">{homeScore}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <span>Status:</span>
+            <span className={`font-medium ${isHitting ? 'text-green-500' : 'text-amber-500'}`}>
+              {isHitting ? 'WINNING' : 'LOSING'}
+            </span>
           </div>
         </>
       )}
       <p className="text-muted-foreground mt-2">{gameStatus}</p>
     </div>
   );
+
+  // Badge text based on bet type
+  const getBadgeText = () => {
+    if (isComplete) {
+      return isHitting ? 'WON' : 'LOST';
+    }
+    
+    if (isLive) {
+      if (betType === 'Player Prop' && currentValue !== undefined && targetValue !== undefined) {
+        return `${formatStatValue(currentValue)}/${formatStatValue(targetValue)}`;
+      }
+      return `${awayScore}-${homeScore}`;
+    }
+    
+    return gameStatus;
+  };
 
   if (compact) {
     return (
@@ -101,9 +171,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
               className={`gap-1 ${bgColor}`}
             >
               {icon}
-              {isLive && `${formatStatValue(currentValue)}/${formatStatValue(targetValue)}`}
-              {isComplete && (isHitting ? 'WON' : 'LOST')}
-              {!isLive && !isComplete && gameStatus}
+              {getBadgeText()}
             </Badge>
           </TooltipTrigger>
           <TooltipContent>
@@ -130,33 +198,56 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
       </div>
 
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">{statType}:</span>
-          <span className="font-medium tabular-nums">
-            {formatStatValue(currentValue)} / {formatStatValue(targetValue)}
-          </span>
-        </div>
-        
-        {(isLive || isComplete) && (
-          <div className="w-full bg-secondary rounded-full h-2">
-            <div 
-              className={`h-2 rounded-full transition-all ${
-                isComplete 
-                  ? (isHitting ? 'bg-green-500' : 'bg-red-500')
-                  : (isHitting ? 'bg-green-500' : 'bg-amber-500')
-              }`}
-              style={{ width: `${Math.min(100, progress)}%` }}
-            />
-          </div>
-        )}
-        
-        {isLive && (
-          <p className="text-xs text-muted-foreground">
-            {isHitting ? '✓ Currently hitting' : `Need ${isOver ? formatStatValue(targetValue - currentValue) : formatStatValue(currentValue - targetValue)} more`}
-          </p>
+        {betType === 'Player Prop' ? (
+          // Player Prop full view
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{statType}:</span>
+              <span className="font-medium tabular-nums">
+                {currentValue !== undefined ? formatStatValue(currentValue) : '--'} / {targetValue !== undefined ? formatStatValue(targetValue) : '--'}
+              </span>
+            </div>
+            
+            {(isLive || isComplete) && progress !== undefined && (
+              <div className="w-full bg-secondary rounded-full h-2">
+                <div 
+                  className={`h-2 rounded-full transition-all ${
+                    isComplete 
+                      ? (isHitting ? 'bg-green-500' : 'bg-red-500')
+                      : (isHitting ? 'bg-green-500' : 'bg-amber-500')
+                  }`}
+                  style={{ width: `${Math.min(100, progress)}%` }}
+                />
+              </div>
+            )}
+            
+            {isLive && currentValue !== undefined && targetValue !== undefined && (
+              <p className="text-xs text-muted-foreground">
+                {isHitting ? '✓ Currently hitting' : `Need ${isOver ? formatStatValue(targetValue - currentValue) : formatStatValue(currentValue - targetValue)} more`}
+              </p>
+            )}
+          </>
+        ) : (
+          // Team Bet full view
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Score:</span>
+              <span className="font-medium tabular-nums">
+                {currentScore || `${awayScore}-${homeScore}`}
+              </span>
+            </div>
+            
+            {(isLive || isComplete) && (
+              <p className="text-xs text-muted-foreground">
+                {isHitting ? '✓ Currently winning' : '✗ Currently losing'}
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
+
+
 

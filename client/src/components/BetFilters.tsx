@@ -12,8 +12,10 @@ import { Search, X } from "lucide-react";
 interface BetFiltersProps {
   sport: string;
   status: string;
+  gameStatus: string;
   onSportChange: (value: string) => void;
   onStatusChange: (value: string) => void;
+  onGameStatusChange: (value: string) => void;
   searchQuery: string;
   onSearchChange: (value: string) => void;
   onClear: () => void;
@@ -22,13 +24,15 @@ interface BetFiltersProps {
 export function BetFilters({
   sport,
   status,
+  gameStatus,
   onSportChange,
   onStatusChange,
+  onGameStatusChange,
   searchQuery,
   onSearchChange,
   onClear,
 }: BetFiltersProps) {
-  const hasFilters = sport !== "all" || status !== "all" || searchQuery !== "";
+  const hasFilters = sport !== "all" || status !== "all" || gameStatus !== "all" || searchQuery !== "";
 
   return (
     <div className="space-y-3">
@@ -45,9 +49,9 @@ export function BetFilters({
       </div>
 
       {/* Filter Row */}
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <Select value={sport} onValueChange={onSportChange}>
-          <SelectTrigger className="flex-1 md:w-32 md:flex-none" data-testid="select-sport-filter">
+          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-sport-filter">
             <SelectValue placeholder="Sport" />
           </SelectTrigger>
           <SelectContent>
@@ -59,8 +63,20 @@ export function BetFilters({
           </SelectContent>
         </Select>
 
+        <Select value={gameStatus} onValueChange={onGameStatusChange}>
+          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-game-status-filter">
+            <SelectValue placeholder="Game" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Games</SelectItem>
+            <SelectItem value="pregame">Pregame</SelectItem>
+            <SelectItem value="live">Live</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={status} onValueChange={onStatusChange}>
-          <SelectTrigger className="flex-1 md:w-32 md:flex-none" data-testid="select-status-filter">
+          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-status-filter">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>

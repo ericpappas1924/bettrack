@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
+import { GameStatusBadge } from "./GameStatusBadge";
 import { Badge } from "@/components/ui/badge";
+import type { Sport } from "@shared/betTypes";
 import {
   Tooltip,
   TooltipContent,
@@ -119,6 +121,13 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="secondary" className="text-xs">{bet.sport}</Badge>
                       <BetStatusBadge status={bet.status} result={bet.result} />
+                      {bet.gameStartTime && (
+                        <GameStatusBadge 
+                          gameStartTime={bet.gameStartTime} 
+                          sport={bet.sport as Sport}
+                          compact 
+                        />
+                      )}
                       {liveStat && <LiveStatsBadge liveStat={liveStat} compact />}
                     </div>
                     <p className="font-medium truncate">{bet.team}</p>
@@ -301,9 +310,18 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                       : "-"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {bet.sport}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="secondary" className="text-xs w-fit">
+                        {bet.sport}
+                      </Badge>
+                      {bet.gameStartTime && (
+                        <GameStatusBadge 
+                          gameStartTime={bet.gameStartTime} 
+                          sport={bet.sport as Sport}
+                          compact 
+                        />
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div>

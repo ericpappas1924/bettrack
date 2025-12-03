@@ -28,6 +28,7 @@ import {
   americanToImpliedProbability,
   calculateExpectedValue,
 } from "@/lib/betting";
+import { getGameStatus, type Sport } from "@shared/betTypes";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [detailBet, setDetailBet] = useState<Bet | null>(null);
   const [sport, setSport] = useState("all");
   const [status, setStatus] = useState("all");
+  const [gameStatus, setGameStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [fetchingCLV, setFetchingCLV] = useState<Set<string>>(new Set());
 
@@ -44,17 +46,34 @@ export default function Dashboard() {
     queryKey: ["/api/bets"],
   });
 
-  // Fetch live stats for active bets
+  // Fetch live stats for ALL active bets that are currently live
   const { data: liveStats = [], refetch: refetchLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
     refetchInterval: 60000, // Refetch every 60 seconds
-    enabled: bets.some((bet) => bet.status === "active" && bet.betType === "Player Prop"),
+    enabled: (() => {
+      const liveBets = bets.filter((bet) => {
+        if (bet.status !== "active" || !bet.gameStartTime) return false;
+        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+        return gameStatus === 'live';
+      });
+      
+      if (liveBets.length > 0) {
+        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
+      }
+      
+      return liveBets.length > 0;
+    })(),
   });
 
-  // Auto-refresh live stats periodically
+  // Auto-refresh live stats periodically for all bet types
   useEffect(() => {
-    const hasActiveBets = bets.some((bet) => bet.status === "active" && bet.betType === "Player Prop");
-    if (hasActiveBets) {
+    const hasLiveBets = bets.some((bet) => {
+      if (bet.status !== "active" || !bet.gameStartTime) return false;
+      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      return gameStatus === 'live';
+    });
+    
+    if (hasLiveBets) {
       const interval = setInterval(() => {
         refetchLiveStats();
       }, 60000); // Every 60 seconds
@@ -62,6 +81,62 @@ export default function Dashboard() {
       return () => clearInterval(interval);
     }
   }, [bets, refetchLiveStats]);
+
+  // Auto-refresh game status badges every 60 seconds
+  // This forces re-render to update pregame/live/completed status without API calls
+  const [, setRefreshTrigger] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 60000); // Every 60 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Auto-settle completed bets every 5 minutes
+  useEffect(() => {
+    const completedBets = bets.filter((bet) => {
+      if (bet.status !== "active" || !bet.gameStartTime) return false;
+      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      return gameStatus === 'completed';
+    });
+    
+    if (completedBets.length > 0) {
+      console.log(`🎯 [DASHBOARD] Completed bets detected - enabling auto-settlement`, {
+        count: completedBets.length,
+        games: completedBets.map(b => b.game)
+      });
+      
+      // Settle immediately on first detection
+      apiRequest("POST", "/api/bets/auto-settle")
+        .then(() => {
+          console.log('✅ [DASHBOARD] Initial auto-settlement completed');
+          queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+        })
+        .catch((error) => {
+          console.error('❌ [DASHBOARD] Initial auto-settlement error:', error);
+        });
+      
+      // Then check every 5 minutes
+      const interval = setInterval(async () => {
+        try {
+          console.log('🔄 [DASHBOARD] Running scheduled auto-settlement...');
+          await apiRequest("POST", "/api/bets/auto-settle");
+          queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+          console.log('✅ [DASHBOARD] Scheduled auto-settlement completed');
+        } catch (error) {
+          console.error('❌ [DASHBOARD] Scheduled auto-settlement error:', error);
+        }
+      }, 5 * 60 * 1000); // Every 5 minutes
+      
+      return () => {
+        console.log('🛑 [DASHBOARD] Clearing auto-settlement interval');
+        clearInterval(interval);
+      };
+    } else {
+      console.log('ℹ️  [DASHBOARD] No completed bets - auto-settlement disabled');
+    }
+  }, [bets]);
 
   const importMutation = useMutation({
     mutationFn: async (importedBets: any[]) => {
@@ -178,7 +253,18 @@ export default function Dashboard() {
       bet.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
       bet.betType.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (bet.game && bet.game.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesSport && matchesStatus && matchesSearch;
+    
+    // Game status filtering
+    let matchesGameStatus = true;
+    if (gameStatus !== "all" && bet.gameStartTime && bet.sport) {
+      const currentGameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      matchesGameStatus = currentGameStatus === gameStatus;
+    } else if (gameStatus !== "all" && !bet.gameStartTime) {
+      // If filtering by game status but bet has no gameStartTime, exclude it
+      matchesGameStatus = false;
+    }
+    
+    return matchesSport && matchesStatus && matchesGameStatus && matchesSearch;
   });
 
   const activeBets = bets.filter((bet) => bet.status === "active");
@@ -289,6 +375,7 @@ export default function Dashboard() {
   const handleClearFilters = () => {
     setSport("all");
     setStatus("all");
+    setGameStatus("all");
     setSearchQuery("");
   };
 
@@ -441,9 +528,11 @@ export default function Dashboard() {
             <BetFilters
               sport={sport}
               status={status}
+              gameStatus={gameStatus}
               searchQuery={searchQuery}
               onSportChange={setSport}
               onStatusChange={setStatus}
+              onGameStatusChange={setGameStatus}
               onSearchChange={setSearchQuery}
               onClear={handleClearFilters}
             />

@@ -5,8 +5,9 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertBetSchema, updateBetSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
-import { trackMultipleBets, autoSettleCompletedBets } from "./services/liveStatTracker";
+import { trackMultipleBets, autoSettleCompletedBets } from "./services/liveStatTrackerV2";
 import { batchFindGameStartTimes } from "./services/oddsApi";
+import { getGameStatus, GAME_STATUS, type Sport } from "@shared/betTypes";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -283,15 +284,34 @@ export async function registerRoutes(
   app.get("/api/bets/live-stats", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const bets = await storage.getAllBets(userId);
+      console.log(`\n📊 [API] Live stats request from user: ${userId.substring(0, 8)}`);
       
-      // Only track active bets
-      const activeBets = bets.filter((b: any) => b.status === 'active');
+      const bets = await storage.getAllBets(userId);
+      const totalActiveBets = bets.filter((b: any) => b.status === 'active').length;
+      
+      // Filter to active bets that are currently live (not pregame or completed)
+      const activeBets = bets.filter((b: any) => {
+        if (b.status !== 'active' || !b.gameStartTime || !b.sport) return false;
+        const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
+        return gameStatus === GAME_STATUS.LIVE; // Only track games in progress
+      });
+      
+      console.log(`📊 [API] Tracking ${activeBets.length} live bet(s) out of ${totalActiveBets} active`);
       
       const liveStats = await trackMultipleBets(activeBets);
+      
+      console.log(`✅ [API] Live stats completed:`, {
+        requested: activeBets.length,
+        returned: liveStats.length,
+        failed: activeBets.length - liveStats.length
+      });
+      
       res.json(liveStats);
     } catch (error) {
-      console.error("Error fetching live stats:", error);
+      console.error(`❌ [API] Live stats error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       res.status(500).json({ error: "Failed to fetch live stats" });
     }
   });
@@ -299,10 +319,17 @@ export async function registerRoutes(
   app.post("/api/bets/auto-settle", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log(`\n🎯 [API] Auto-settle request from user: ${userId.substring(0, 8)}`);
+      
       await autoSettleCompletedBets(userId);
+      
+      console.log(`✅ [API] Auto-settlement completed successfully`);
       res.json({ message: "Auto-settlement complete" });
     } catch (error) {
-      console.error("Error auto-settling bets:", error);
+      console.error(`❌ [API] Auto-settle error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
       res.status(500).json({ error: "Failed to auto-settle bets" });
     }
   });

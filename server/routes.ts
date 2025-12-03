@@ -467,6 +467,10 @@ export async function registerRoutes(
             let playerName = propMatch[1].trim();
             const isOver = propMatch[2].toLowerCase() === 'over';
             const statType = propMatch[4].trim();
+            
+            // CRITICAL FIX: Remove team code in parentheses from player name
+            // "Jay Huff (IND)" -> "Jay Huff"
+            playerName = playerName.replace(/\s*\([A-Z]{2,4}\)\s*$/, '').trim();
           
           console.log(`   Raw player extraction: "${playerName}"`);
           

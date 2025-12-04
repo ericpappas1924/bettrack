@@ -46,32 +46,38 @@ export default function Dashboard() {
     queryKey: ["/api/bets"],
   });
 
-  // Check if any bets are currently live
-  const liveBets = bets.filter((bet) => {
-    if (bet.status !== "active" || !bet.gameStartTime) return false;
-    const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-    return gameStatus === 'live';
-  });
-  
-  const hasLiveBets = liveBets.length > 0;
-
-  // Fetch live stats - only polls when there are actually live games
-  const { data: liveStats = [] } = useQuery<LiveStat[]>({
+  // Fetch live stats for ALL active bets that are currently live
+  const { data: liveStats = [], refetch: refetchLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
-    // Smart polling: 30 sec if live games, disabled otherwise
-    refetchInterval: hasLiveBets ? 30000 : false,
-    enabled: hasLiveBets,
+    refetchInterval: 60000, // Refetch every 60 seconds
+    enabled: (() => {
+      const liveBets = bets.filter((bet) => {
+        if (bet.status !== "active" || !bet.gameStartTime) return false;
+        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+        return gameStatus === 'live';
+      });
+      
+      if (liveBets.length > 0) {
+        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
+      }
+      
+      return liveBets.length > 0;
+    })(),
   });
-  
-  // Log when live tracking starts/stops
-  useEffect(() => {
-    if (hasLiveBets) {
-      console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
-    }
-  }, [hasLiveBets, liveBets.length]);
 
-  // NOTE: Live stats polling is handled by React Query's refetchInterval above
-  // No need for separate setInterval - would cause duplicate API calls
+  // Live stats are fetched via API with refetchInterval
+  // Server-side scheduler ensures games are always tracked
+  useEffect(() => {
+    const hasLiveBets = bets.some((bet) => {
+      if (bet.status !== "active" || !bet.gameStartTime) return false;
+      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      return gameStatus === 'live';
+    });
+    
+    if (hasLiveBets) {
+      console.log(`🔴 [DASHBOARD] Live bets detected - auto-refresh enabled`);
+    }
+  }, [bets]);
 
   // Auto-refresh game status badges every 60 seconds
   // This forces re-render to update pregame/live/completed status without API calls
@@ -84,9 +90,20 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // NOTE: Auto-settlement now runs SERVER-SIDE every 5 minutes
-  // No client-side timer needed - server handles it automatically!
-  // See: server/services/autoSettlementScheduler.ts
+  // Note: Auto-settlement now runs SERVER-SIDE (every 5 minutes)
+  // No client-side timer needed - server handles it 24/7
+  useEffect(() => {
+    const completedBets = bets.filter((bet) => {
+      if (bet.status !== "active" || !bet.gameStartTime) return false;
+      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      return gameStatus === 'completed';
+    });
+    
+    if (completedBets.length > 0) {
+      console.log(`ℹ️  [DASHBOARD] ${completedBets.length} completed bet(s) detected`);
+      console.log(`   Server-side auto-settlement will process within 5 minutes`);
+    }
+  }, [bets]);
 
   const importMutation = useMutation({
     mutationFn: async (importedBets: any[]) => {

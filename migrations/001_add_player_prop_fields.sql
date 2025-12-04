@@ -20,3 +20,5 @@ COMMENT ON COLUMN bets.line IS 'Line value for player props (e.g., "11.5", "5.5"
 CREATE INDEX IF NOT EXISTS idx_bets_player ON bets(player) WHERE player IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_bets_market ON bets(market) WHERE market IS NOT NULL;
 
+
+

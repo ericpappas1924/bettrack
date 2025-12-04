@@ -95,8 +95,12 @@ async function updateBetCLV(bet: any, forceUpdate = false): Promise<{ updated: b
                         !/^\d+$/.test(bet.game);
     
     if (!isValidGame) {
-      const errorMsg = `Invalid game matchup: "${bet.game}"`;
+      const errorMsg = bet.game && !bet.game.includes(' vs ')
+        ? `Incomplete game matchup: "${bet.game}". Please edit the bet and add the opponent (e.g., "${bet.game} vs OPPONENT")`
+        : `Invalid game matchup: "${bet.game}"`;
       console.log(`     ❌ ${errorMsg}`);
+      console.log(`     💡 CLV requires both teams in the format: "TEAM A vs TEAM B"`);
+      console.log(`     💡 You can manually edit this bet to add the full matchup`);
       
       await storage.updateBet(bet.id, {
         clvFetchError: errorMsg,

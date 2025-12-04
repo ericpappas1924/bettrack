@@ -480,6 +480,71 @@ export async function batchFindGameStartTimes(
 }
 
 /**
+ * Find the complete matchup for a single team on a specific date
+ * Used to enrich incomplete bet data (e.g., "OHIO STATE" → "Ohio State vs Oregon")
+ */
+export async function findMatchupForTeam(
+  team: string,
+  sport: string,
+  gameDate: Date | string
+): Promise<string | null> {
+  const sportKey = SPORT_MAP[sport];
+  
+  if (!sportKey) {
+    console.log(`❌ No Odds API mapping for sport: ${sport}`);
+    return null;
+  }
+
+  try {
+    const gameDateObj = typeof gameDate === 'string' ? new Date(gameDate) : gameDate;
+    const events = await fetchEvents(sportKey);
+    
+    console.log(`🔍 Looking for ${team} game on ${gameDateObj.toDateString()}...`);
+    
+    // Find games on the same date involving this team
+    const matchingEvents = events.filter(e => {
+      const eventDate = new Date(e.commence_time);
+      
+      // Check if dates match (ignore time for now, just compare date)
+      const sameDate = eventDate.toDateString() === gameDateObj.toDateString();
+      
+      if (!sameDate) return false;
+      
+      // Check if team is involved in this game
+      const teamLower = team.toLowerCase().trim();
+      const home = e.home_team.toLowerCase();
+      const away = e.away_team.toLowerCase();
+      
+      // Flexible matching: check if team name is contained in either home or away
+      return home.includes(teamLower) || away.includes(teamLower) ||
+             teamLower.includes(home) || teamLower.includes(away);
+    });
+    
+    if (matchingEvents.length === 0) {
+      console.log(`❌ No games found for "${team}" on ${gameDateObj.toDateString()}`);
+      return null;
+    }
+    
+    if (matchingEvents.length > 1) {
+      console.log(`⚠️  Multiple games found for "${team}" on ${gameDateObj.toDateString()}:`);
+      matchingEvents.forEach(e => {
+        console.log(`   - ${e.away_team} vs ${e.home_team}`);
+      });
+      console.log(`   Using first match`);
+    }
+    
+    const event = matchingEvents[0];
+    const matchup = `${event.away_team} vs ${event.home_team}`;
+    console.log(`✅ Found matchup: ${matchup}`);
+    
+    return matchup;
+  } catch (error) {
+    console.error(`❌ Error finding matchup for team:`, error);
+    return null;
+  }
+}
+
+/**
  * Find closing odds for straight bets (h2h, spreads)
  * This uses the old endpoint which works for non-player-prop markets
  */
@@ -490,25 +555,78 @@ export async function findClosingOdds(
   team: string
 ): Promise<number | null> {
   const sportKey = SPORT_MAP[sport];
-  if (!sportKey) return null;
+  if (!sportKey) {
+    console.log(`   ⚠️  Sport ${sport} not mapped to Odds API`);
+    return null;
+  }
+
+  console.log(`   🔍 Finding closing odds:`, { game, sport: sportKey, market, team });
 
   const events = await fetchEvents(sportKey);
+  console.log(`   📊 Found ${events.length} events for ${sport}`);
+  
   const gameTeams = game.split(' vs ').map(t => t.trim().toLowerCase());
+  console.log(`   🔎 Searching for teams:`, gameTeams);
   
   const matchingEvent = events.find(e => {
     const home = e.home_team.toLowerCase();
     const away = e.away_team.toLowerCase();
-    return gameTeams.some(gt => 
+    const matches = gameTeams.some(gt => 
       home.includes(gt) || gt.includes(home) ||
       away.includes(gt) || gt.includes(away)
     );
+    
+    if (matches) {
+      console.log(`   ✅ Match found: ${e.away_team} @ ${e.home_team}`);
+    }
+    
+    return matches;
   });
 
-  if (!matchingEvent) return null;
+  if (!matchingEvent) {
+    console.log(`   ❌ No matching event found in API`);
+    console.log(`   Available games:`, events.map(e => `${e.away_team} @ ${e.home_team}`));
+    return null;
+  }
 
-  // For straight bets, we'd fetch from the odds endpoint (not event-specific)
-  // This would need the old fetchGamesForSport logic
-  // For now, return null since we're focusing on player props
-  return null;
+  console.log(`   📝 Event ID: ${matchingEvent.id}`);
+
+  // Fetch odds for this specific event
+  try {
+    const oddsData = await fetchEventOdds(matchingEvent.id, sportKey, [market]);
+    console.log(`   📊 Odds data bookmakers:`, oddsData.bookmakers.length);
+    
+    if (!oddsData.bookmakers || oddsData.bookmakers.length === 0) {
+      console.log(`   ⚠️  No bookmakers found for this market`);
+      return null;
+    }
+
+    // Find the market in the response
+    const bookmaker = oddsData.bookmakers[0];
+    const marketData = bookmaker.markets.find(m => m.key === market);
+    
+    if (!marketData) {
+      console.log(`   ⚠️  Market ${market} not found for this game`);
+      return null;
+    }
+
+    // For h2h/spreads/totals, find the outcome matching the team
+    const teamLower = team.toLowerCase();
+    const outcome = marketData.outcomes.find(o => 
+      o.name.toLowerCase().includes(teamLower) || 
+      teamLower.includes(o.name.toLowerCase())
+    );
+
+    if (!outcome) {
+      console.log(`   ⚠️  Team ${team} not found in outcomes:`, marketData.outcomes.map(o => o.name));
+      return null;
+    }
+
+    console.log(`   ✅ Found odds: ${outcome.price} for ${outcome.name}`);
+    return outcome.price;
+  } catch (error) {
+    console.error(`   ❌ Error fetching odds:`, error);
+    return null;
+  }
 }
 

@@ -133,7 +133,7 @@ function extractLiveBetDetails(block: string): {
   return { game, description, sport, gameId, league, odds };
 }
 
-function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport; gameStartTime: Date | null } {
+function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport; gameStartTime: Date | null; incompleteMatchup?: boolean } {
   const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+?)(?=\s*\n|Pending|$)/s);
   if (straightMatch) {
     const gameDate = straightMatch[1];
@@ -167,10 +167,13 @@ function extractStraightBetDetails(block: string): { game: string; description: 
       // If parsing fails, just leave as null
     }
     
-    return { game, description: betDetails, sport, gameStartTime };
+    // Check if this is an incomplete matchup (single team, no "vs")
+    const incompleteMatchup = !game.includes(' vs ') && game.length < 50;
+    
+    return { game, description: betDetails, sport, gameStartTime, incompleteMatchup };
   }
   
-  return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block), gameStartTime: null };
+  return { game: 'Unknown', description: 'Unknown bet', sport: getSportFromText(block), gameStartTime: null, incompleteMatchup: true };
 }
 
 function extractPlayerPropDetails(block: string): { 
@@ -425,6 +428,9 @@ export function parseBetPaste(rawText: string): ParseResult {
         gameStartTime = straightDetails.gameStartTime;
         if (gameStartTime) {
           console.log(`  ✓ Extracted game time from straight bet: ${gameStartTime}`);
+        }
+        if (straightDetails.incompleteMatchup) {
+          warnings.push('Incomplete game matchup - CLV auto-fetch may not work. You can manually update the game field to include both teams (e.g., "TEAM A vs TEAM B")');
         }
       }
       

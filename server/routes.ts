@@ -82,7 +82,58 @@ export async function registerRoutes(
       console.log(`Total bets to import: ${betsWithUser.length}`);
       console.log(`Sample bet data:`, JSON.stringify(betsWithUser[0], null, 2));
       
-      // Enrich bets with game start times from Odds API
+      // STEP 1: Enrich incomplete matchups (e.g., "OHIO STATE" → "Ohio State vs Oregon")
+      try {
+        const { findMatchupForTeam } = await import('./services/oddsApi');
+        
+        const incompleteMatchups = betsWithUser.filter((bet: any) => {
+          return bet.game && 
+                 !bet.game.includes(' vs ') && 
+                 bet.sport &&
+                 bet.gameStartTime &&
+                 bet.betType !== 'Parlay';
+        });
+        
+        if (incompleteMatchups.length > 0) {
+          console.log(`\n🔍 Found ${incompleteMatchups.length} bets with incomplete matchups`);
+          console.log(`   Attempting to enrich from Odds API...`);
+          
+          for (const bet of incompleteMatchups) {
+            console.log(`\n   🔎 Looking up: "${bet.game}" (${bet.sport}) on ${new Date(bet.gameStartTime).toDateString()}`);
+            
+            const fullMatchup = await findMatchupForTeam(
+              bet.game,
+              bet.sport,
+              bet.gameStartTime
+            );
+            
+            if (fullMatchup) {
+              // Update the bet's game field
+              const betIndex = betsWithUser.indexOf(bet);
+              betsWithUser[betIndex] = {
+                ...bet,
+                game: fullMatchup
+              };
+              console.log(`   ✅ Enriched: "${bet.game}" → "${fullMatchup}"`);
+            } else {
+              console.log(`   ⚠️  Could not find opponent for "${bet.game}"`);
+            }
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          const enrichedCount = betsWithUser.filter((bet: any) => 
+            bet.game && bet.game.includes(' vs ')
+          ).length;
+          console.log(`\n✅ Matchup enrichment complete: ${enrichedCount} bets now have full matchups`);
+        }
+      } catch (matchupError) {
+        console.error("\n❌ ERROR enriching matchups:", matchupError);
+        // Continue with import even if enrichment fails
+      }
+      
+      // STEP 2: Enrich bets with game start times from Odds API
       try {
         const betsNeedingTimes = betsWithUser
           .filter((bet: any) => !bet.gameStartTime && bet.game && bet.sport)
@@ -418,10 +469,20 @@ export async function registerRoutes(
       
       if (!isValidGame) {
         console.log(`⚠️  Invalid game matchup: "${existingBet.game}"`);
+        
+        if (existingBet.game && !existingBet.game.includes(' vs ')) {
+          console.log(`   💡 Incomplete matchup - missing opponent team`);
+          console.log(`   💡 You can edit the bet and update the game field to: "${existingBet.game} vs OPPONENT"`);
+          return res.status(400).json({ 
+            error: `Incomplete game matchup: "${existingBet.game}"`,
+            suggestion: `Please edit this bet and update the game field to include both teams (e.g., "${existingBet.game} vs OPPONENT"). Then CLV auto-fetch will work.`
+          });
+        }
+        
         console.log(`   This is likely an older bet - cannot fetch odds without valid matchup`);
         return res.status(400).json({ 
-          error: "Cannot fetch odds: Invalid game matchup (legacy bet)",
-          suggestion: "Please enter closing odds manually. Newer bets will have proper matchup info."
+          error: "Cannot fetch odds: Invalid game matchup",
+          suggestion: "Please enter closing odds manually or update the game field to a valid matchup (e.g., 'TEAM A vs TEAM B')."
         });
       }
       

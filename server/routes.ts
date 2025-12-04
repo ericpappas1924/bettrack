@@ -40,6 +40,69 @@ export async function registerRoutes(
     }
   });
 
+  // Live stats route - MUST come before /:id to avoid matching "live-stats" as an ID
+  console.log('📊 [ROUTES] Registering /api/bets/live-stats endpoint');
+  app.get("/api/bets/live-stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      console.log(`\n📊 [API] Live stats request from user: ${userId.substring(0, 8)}`);
+      console.log(`📊 [API] Route HIT - v2024-12-04`);
+      
+      const bets = await storage.getAllBets(userId);
+      console.log(`📊 [API] Retrieved ${bets.length} total bets`);
+      
+      const totalActiveBets = bets.filter((b: any) => b.status === 'active').length;
+      console.log(`📊 [API] Found ${totalActiveBets} active bets`);
+      
+      // Filter to active bets that are currently live (not pregame or completed)
+      const activeBets = bets.filter((b: any) => {
+        if (b.status !== 'active' || !b.gameStartTime || !b.sport) {
+          console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: status=${b.status}, hasGameTime=${!!b.gameStartTime}, hasSport=${!!b.sport}`);
+          return false;
+        }
+        const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
+        console.log(`   🎯 Bet ${b.id.substring(0, 8)}: gameStatus=${gameStatus}`);
+        return gameStatus === GAME_STATUS.LIVE; // Only track games in progress
+      });
+      
+      console.log(`📊 [API] Tracking ${activeBets.length} live bet(s) out of ${totalActiveBets} active`);
+      
+      const liveStats = await trackMultipleBets(activeBets);
+      
+      console.log(`✅ [API] Live stats completed:`, {
+        requested: activeBets.length,
+        returned: liveStats.length,
+        failed: activeBets.length - liveStats.length
+      });
+      
+      res.json(liveStats);
+    } catch (error) {
+      console.error(`❌ [API] Live stats error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      res.status(500).json({ error: "Failed to fetch live stats" });
+    }
+  });
+
+  app.post("/api/bets/auto-settle", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      console.log(`\n🎯 [API] Auto-settle request from user: ${userId.substring(0, 8)}`);
+      
+      await autoSettleCompletedBets(userId);
+      
+      console.log(`✅ [API] Auto-settlement completed successfully`);
+      res.json({ message: "Auto-settlement complete" });
+    } catch (error) {
+      console.error(`❌ [API] Auto-settle error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      res.status(500).json({ error: "Failed to auto-settle bets" });
+    }
+  });
+
   app.get("/api/bets/:id", isAuthenticated, async (req: any, res) => {
     try {
       const bet = await storage.getBet(req.params.id);
@@ -331,67 +394,7 @@ export async function registerRoutes(
     }
   });
 
-  // Live stats routes
-  app.get("/api/bets/live-stats", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      console.log(`\n📊 [API] Live stats request from user: ${userId.substring(0, 8)}`);
-      console.log(`📊 [API] Route HIT - v2024-12-04`);
-      
-      const bets = await storage.getAllBets(userId);
-      console.log(`📊 [API] Retrieved ${bets.length} total bets`);
-      
-      const totalActiveBets = bets.filter((b: any) => b.status === 'active').length;
-      console.log(`📊 [API] Found ${totalActiveBets} active bets`);
-      
-      // Filter to active bets that are currently live (not pregame or completed)
-      const activeBets = bets.filter((b: any) => {
-        if (b.status !== 'active' || !b.gameStartTime || !b.sport) {
-          console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: status=${b.status}, hasGameTime=${!!b.gameStartTime}, hasSport=${!!b.sport}`);
-          return false;
-        }
-        const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
-        console.log(`   🎯 Bet ${b.id.substring(0, 8)}: gameStatus=${gameStatus}`);
-        return gameStatus === GAME_STATUS.LIVE; // Only track games in progress
-      });
-      
-      console.log(`📊 [API] Tracking ${activeBets.length} live bet(s) out of ${totalActiveBets} active`);
-      
-      const liveStats = await trackMultipleBets(activeBets);
-      
-      console.log(`✅ [API] Live stats completed:`, {
-        requested: activeBets.length,
-        returned: liveStats.length,
-        failed: activeBets.length - liveStats.length
-      });
-      
-      res.json(liveStats);
-    } catch (error) {
-      console.error(`❌ [API] Live stats error:`, {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      res.status(500).json({ error: "Failed to fetch live stats" });
-    }
-  });
-
-  app.post("/api/bets/auto-settle", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      console.log(`\n🎯 [API] Auto-settle request from user: ${userId.substring(0, 8)}`);
-      
-      await autoSettleCompletedBets(userId);
-      
-      console.log(`✅ [API] Auto-settlement completed successfully`);
-      res.json({ message: "Auto-settlement complete" });
-    } catch (error) {
-      console.error(`❌ [API] Auto-settle error:`, {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      res.status(500).json({ error: "Failed to auto-settle bets" });
-    }
-  });
+  // Note: live-stats and auto-settle routes moved earlier to avoid route matching conflicts
 
   // Calculate CLV from closing odds
   app.post("/api/bets/:id/calculate-clv", isAuthenticated, async (req: any, res) => {

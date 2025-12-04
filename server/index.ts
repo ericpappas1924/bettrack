@@ -61,7 +61,23 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await registerRoutes(httpServer, app);
+  console.log('\n🚀 [STARTUP] Registering routes...');
+  try {
+    await registerRoutes(httpServer, app);
+    console.log('✅ [STARTUP] Routes registered successfully');
+    
+    // Log all registered routes
+    const routes: string[] = [];
+    app._router.stack.forEach((middleware: any) => {
+      if (middleware.route) {
+        routes.push(`${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
+      }
+    });
+    console.log('📋 [STARTUP] Registered routes:', routes.filter(r => r.includes('/api/bets')));
+  } catch (error) {
+    console.error('❌ [STARTUP] Route registration failed:', error);
+    throw error;
+  }
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

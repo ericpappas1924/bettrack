@@ -336,13 +336,47 @@ export function extractPlayerStat(
     const playerNameNorm = normalizePlayer(fullName);
     
     if (playerNameNorm.includes(targetPlayerNorm) || targetPlayerNorm.includes(playerNameNorm)) {
-      // Found the player, now extract the stat
-      const statKey = mapStatType(statType);
-      const value = (playerStat as any)[statKey];
+      // Found the player!
       
-      if (value !== undefined && value !== null) {
-        console.log(`✅ Found ${fullName}'s ${statType}: ${value}`);
-        return typeof value === 'number' ? value : parseFloat(String(value));
+      // Check if this is a combined stat (e.g., "Pts + Reb + Ast", "PRA", "Points + Rebounds")
+      if (statType.includes('+') || statType.toUpperCase() === 'PRA') {
+        // Parse combined stats
+        let statParts: string[];
+        
+        if (statType.toUpperCase() === 'PRA') {
+          statParts = ['Points', 'Rebounds', 'Assists'];
+        } else {
+          // Split by + and clean up
+          statParts = statType.split('+').map(s => s.trim());
+        }
+        
+        let totalValue = 0;
+        const statValues: Record<string, number> = {};
+        
+        for (const part of statParts) {
+          const statKey = mapStatType(part);
+          const value = (playerStat as any)[statKey];
+          
+          if (value !== undefined && value !== null) {
+            const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+            statValues[part] = numValue;
+            totalValue += numValue;
+          } else {
+            console.warn(`⚠️  Could not find ${part} for ${fullName}`);
+          }
+        }
+        
+        console.log(`✅ Found ${fullName}'s ${statType}: ${JSON.stringify(statValues)} = ${totalValue}`);
+        return totalValue;
+      } else {
+        // Single stat
+        const statKey = mapStatType(statType);
+        const value = (playerStat as any)[statKey];
+        
+        if (value !== undefined && value !== null) {
+          console.log(`✅ Found ${fullName}'s ${statType}: ${value}`);
+          return typeof value === 'number' ? value : parseFloat(String(value));
+        }
       }
     }
   }

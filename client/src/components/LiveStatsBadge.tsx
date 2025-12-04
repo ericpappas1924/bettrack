@@ -201,13 +201,20 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge 
-              variant={variant}
-              className={`gap-1 ${bgColor}`}
-            >
-              {icon}
-              {getBadgeText()}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge 
+                variant={variant}
+                className={`gap-1 ${bgColor}`}
+              >
+                {icon}
+                {getBadgeText()}
+              </Badge>
+              {(isLive || isComplete) && (
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {timeRemaining}
+                </span>
+              )}
+            </div>
           </TooltipTrigger>
           <TooltipContent>
             {tooltipContent}

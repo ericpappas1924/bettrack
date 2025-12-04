@@ -451,10 +451,17 @@ export async function registerRoutes(
           const isOver = existingBet.overUnder === 'Over';
           const targetLine = parseFloat(existingBet.line);
           
+          // CRITICAL: Clean player name (remove team code if present in database)
+          const cleanPlayer = existingBet.player.replace(/\s*\([A-Z]{2,4}\)\s*$/i, '').trim();
+          
+          if (cleanPlayer !== existingBet.player) {
+            console.log(`🔧 Cleaned player name: "${existingBet.player}" -> "${cleanPlayer}"`);
+          }
+          
           const propResult = await findPlayerPropOdds(
             existingBet.game,
             existingBet.sport,
-            existingBet.player,
+            cleanPlayer,
             existingBet.market,
             isOver,
             targetLine  // Pass target line for matching

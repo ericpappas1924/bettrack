@@ -144,9 +144,21 @@ function extractStraightBetDetails(block: string): { game: string; description: 
     betDetails = betDetails.replace(/\s*\(Score:[^)]+\)/, '').trim();
     
     let sport = getSportFromText(sportTag);
+    let game = '';
     
-    const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
-    const game = teamMatch ? teamMatch[1].trim() : betDetails;
+    // Check for quarter/period bets with teams in parentheses
+    // Pattern: "TOTAL u14½-115 (4Q DAL COWBOYS vrs 4Q DET LIONS)"
+    const quarterBetMatch = betDetails.match(/\((?:\d[QH]\s+)?([A-Z\s]+?)\s+(?:vrs|vs)\s+(?:\d[QH]\s+)?([A-Z\s]+?)\)/i);
+    if (quarterBetMatch) {
+      // Extract teams from parentheses and normalize "vrs" to "vs"
+      const team1 = quarterBetMatch[1].trim();
+      const team2 = quarterBetMatch[2].trim();
+      game = `${team1} vs ${team2}`;
+    } else {
+      // Regular straight bet - extract team name
+      const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
+      game = teamMatch ? teamMatch[1].trim() : betDetails;
+    }
     
     // Parse game start time if available (format: Nov-29-2025 12:00 PM)
     let gameStartTime: Date | null = null;

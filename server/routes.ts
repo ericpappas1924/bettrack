@@ -336,14 +336,22 @@ export async function registerRoutes(
     try {
       const userId = req.user.claims.sub;
       console.log(`\n📊 [API] Live stats request from user: ${userId.substring(0, 8)}`);
+      console.log(`📊 [API] Route HIT - v2024-12-04`);
       
       const bets = await storage.getAllBets(userId);
+      console.log(`📊 [API] Retrieved ${bets.length} total bets`);
+      
       const totalActiveBets = bets.filter((b: any) => b.status === 'active').length;
+      console.log(`📊 [API] Found ${totalActiveBets} active bets`);
       
       // Filter to active bets that are currently live (not pregame or completed)
       const activeBets = bets.filter((b: any) => {
-        if (b.status !== 'active' || !b.gameStartTime || !b.sport) return false;
+        if (b.status !== 'active' || !b.gameStartTime || !b.sport) {
+          console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: status=${b.status}, hasGameTime=${!!b.gameStartTime}, hasSport=${!!b.sport}`);
+          return false;
+        }
         const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
+        console.log(`   🎯 Bet ${b.id.substring(0, 8)}: gameStatus=${gameStatus}`);
         return gameStatus === GAME_STATUS.LIVE; // Only track games in progress
       });
       
@@ -823,6 +831,21 @@ export async function registerRoutes(
       console.error("Error fetching admin stats:", error);
       res.status(500).json({ error: "Failed to fetch stats" });
     }
+  });
+
+  // Version check endpoint for debugging
+  app.get("/api/version", (req, res) => {
+    res.json({
+      version: "2024-12-04-v2",
+      features: {
+        liveStatsEndpoint: true,
+        ballDontLieIntegration: true,
+        autoSettlement: true,
+        timeRemaining: true,
+        cbbSupport: true
+      },
+      timestamp: new Date().toISOString()
+    });
   });
 
   return httpServer;

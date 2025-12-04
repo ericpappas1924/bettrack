@@ -422,6 +422,8 @@ export function parseBetPaste(rawText: string): ParseResult {
         betType = 'Player Prop';
       } else if (block.includes('PARLAY')) {
         betType = 'Parlay';
+      } else if (block.includes('TEAS')) {
+        betType = 'Teaser';
       } else if (isLive) {
         betType = 'Live';
       }

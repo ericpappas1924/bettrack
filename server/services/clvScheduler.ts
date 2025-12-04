@@ -95,6 +95,13 @@ async function updateBetCLV(bet: any, forceUpdate = false): Promise<{ updated: b
       return { updated: false, skipped: true };
     }
     
+    // Skip parlays and teasers - CLV is complex for multi-leg bets
+    const betTypeLower = bet.betType?.toLowerCase() || '';
+    if (betTypeLower.includes('parlay') || betTypeLower.includes('teaser')) {
+      console.log(`     ⏭️  Skipping ${bet.betType} - CLV not supported for multi-leg bets`);
+      return { updated: false, skipped: true };
+    }
+    
     // Validate game field for team bets
     const isValidGame = bet.game && 
                         bet.game.includes(' vs ') && 

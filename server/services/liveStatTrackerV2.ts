@@ -703,7 +703,19 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   
   console.log(`[AUTO-SETTLE] Found ${activeBets.length} active bet(s)`);
   
-  const liveStats = await trackMultipleBets(activeBets);
+  // Filter out parlays and teasers - they need manual settlement
+  const straightBets = activeBets.filter((b: any) => {
+    const betType = b.betType?.toLowerCase() || '';
+    const isMultiLeg = betType.includes('parlay') || betType.includes('teaser');
+    if (isMultiLeg) {
+      console.log(`⏭️  [AUTO-SETTLE] Skipping ${b.betType} bet ${b.id.substring(0, 8)} - requires manual settlement`);
+    }
+    return !isMultiLeg;
+  });
+  
+  console.log(`[AUTO-SETTLE] ${straightBets.length} straight bet(s) eligible for auto-settlement`);
+  
+  const liveStats = await trackMultipleBets(straightBets);
   const completedBets = liveStats.filter(stat => stat.isComplete);
   
   console.log(`[AUTO-SETTLE] ${completedBets.length} completed bet(s) to settle`);

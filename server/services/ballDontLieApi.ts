@@ -501,7 +501,24 @@ export async function findNBAPlayerPropFromBallDontLie(
   
   // Step 1: Find the game
   const gameTeams = game.split(' vs ').map(t => t.trim());
-  const nbaGames = await fetchNBAGames(new Date().toISOString().split('T')[0]);
+  
+  // Search today and tomorrow (games can be on either day depending on timezone)
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const todayStr = today.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  
+  console.log(`🔍 Searching for game on: ${todayStr} and ${tomorrowStr}`);
+  
+  let nbaGames = await fetchNBAGames(todayStr);
+  
+  // If not found today, try tomorrow
+  if (nbaGames.length === 0) {
+    console.log(`   No games today, trying tomorrow...`);
+    nbaGames = await fetchNBAGames(tomorrowStr);
+  }
   
   const matchingGame = nbaGames.find((g: any) => {
     const home = g.home_team.full_name.toLowerCase();

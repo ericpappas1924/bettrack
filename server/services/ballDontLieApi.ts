@@ -190,7 +190,21 @@ export const fetchNBABoxScore = memoize(
       });
       
       if (data && data.data && Array.isArray(data.data) && data.data.length > 0) {
-        const boxScore = data.data[0];
+        console.log(`📦 [BALLDONTLIE] Received ${data.data.length} box score(s) for date ${date}`);
+        
+        // CRITICAL: Filter by game_id to get the correct game
+        // API returns ALL games for the date, not just the requested game_id
+        const boxScore = data.data.find((bs: any) => bs.id === Number(gameId));
+        
+        if (!boxScore) {
+          console.error(`❌ [BALLDONTLIE] Game ID ${gameId} not found in response!`);
+          console.log(`   Available games:`, data.data.map((bs: any) => ({
+            id: bs.game.id,
+            matchup: `${bs.visitor_team.full_name} @ ${bs.home_team.full_name}`
+          })));
+          return null;
+        }
+        
         const totalPlayers = boxScore.home_team.players.length + boxScore.visitor_team.players.length;
         console.log(`✅ [BALLDONTLIE] Box score received:`, {
           gameId,

@@ -322,9 +322,9 @@ function extractPlayerPropDetails(block: string): {
 }
 
 function extractParlayDetails(block: string): { legs: string[]; description: string; gameStartTime: Date | null } {
-  // Pattern captures: [DATE] [SPORT] - [NUMBER] BET_DETAILS
-  // Simpler approach: match each leg separately
-  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n]+?)(?=\s*\[(?:Pending|Won|Lost)\]|$)/g;
+  // Pattern captures: [DATE] [SPORT] - [NUMBER] BET_DETAILS [STATUS] (Score: X-Y)
+  // Need to capture status tags and scores too
+  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n]+)/g;
   const legs: string[] = [];
   const gameTimes: Date[] = [];
   
@@ -335,13 +335,27 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
     const gameDate = match[1]; // e.g., "Dec-07-2025 01:00 PM"
     const sport = match[2]; // e.g., "NFL"
     const lineNum = match[3]; // e.g., "121"
-    let betDetail = match[4].trim(); // e.g., "WAS COMMANDERS +2-110"
+    let fullLegText = match[4].trim(); // e.g., "WAS COMMANDERS +2-110 [Pending]"
     
-    // Clean up extra whitespace
+    // Extract status and score from the end
+    const statusMatch = fullLegText.match(/(\[(?:Pending|Won|Lost)\])?\s*(\(Score:\s*[\d-]+\))?$/);
+    
+    let betDetail = fullLegText;
+    let status = '';
+    let score = '';
+    
+    if (statusMatch) {
+      // Remove status and score from the end to get just bet details
+      betDetail = fullLegText.substring(0, fullLegText.length - statusMatch[0].length).trim();
+      status = statusMatch[1] || '';
+      score = statusMatch[2] || '';
+    }
+    
+    // Clean up extra whitespace in bet detail
     betDetail = betDetail.replace(/\s+/g, ' ').trim();
     
-    // Store full leg with date/sport for tracking later
-    const legWithDate = `[${gameDate}] [${sport}] ${betDetail}`;
+    // Store full leg with date/sport AND status for tracking later
+    const legWithDate = `[${gameDate}] [${sport}] ${betDetail} ${status}${score}`.trim();
     legs.push(legWithDate);
     
     // Try to parse the game time for this leg
@@ -509,9 +523,10 @@ export function parseBetPaste(rawText: string): ParseResult {
         const parlayDetails = extractParlayDetails(block);
         legs = parlayDetails.legs;
         description = betType === 'Teaser' 
-          ? `${legs?.length || 0}-Team Teaser`
+          ? `${legs?.length || 0}-Leg Teaser`
           : parlayDetails.description;
-        game = legs && legs.length > 0 ? legs.join(' / ') : 'Multi-team bet';
+        // For game field, use short description instead of all legs
+        game = description;
         gameStartTime = parlayDetails.gameStartTime;
         if (gameStartTime) {
           console.log(`  ✓ Extracted game time from ${betType.toLowerCase()}: ${gameStartTime}`);

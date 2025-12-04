@@ -9,6 +9,7 @@ import {
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
+import { ParlayLegsBadge } from "./ParlayLegsBadge";
 import { Badge } from "@/components/ui/badge";
 import type { Sport } from "@shared/betTypes";
 import { Button } from "@/components/ui/button";
@@ -488,8 +489,14 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
             <>
               <Separator />
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Notes</p>
-                <p className="text-base whitespace-pre-line">{bet.notes}</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {(bet.betType === 'Parlay' || bet.betType === 'Teaser') ? 'Legs' : 'Notes'}
+                </p>
+                {(bet.betType === 'Parlay' || bet.betType === 'Teaser') ? (
+                  <ParlayLegsBadge notes={bet.notes} betType={bet.betType} />
+                ) : (
+                  <p className="text-base whitespace-pre-line">{bet.notes}</p>
+                )}
               </div>
             </>
           )}

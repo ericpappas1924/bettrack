@@ -288,16 +288,8 @@ async function trackNBABet(
             gameId: game.id,
             date: game.date
           });
-          return {
-            ...baseResponse,
-            playerName: betDetails.playerName,
-            statType: betDetails.statType,
-            targetValue: betDetails.targetValue,
-            currentValue: 0,
-            progress: 0,
-            isOver: betDetails.isOver,
-            isWinning: false,
-          };
+          // Return null so bet is NOT auto-settled without actual stats
+          return null;
         }
         
         const totalPlayers = boxScore.home_team.players.length + boxScore.visitor_team.players.length;
@@ -313,7 +305,17 @@ async function trackNBABet(
           boxScore,
           betDetails.playerName || '',
           betDetails.statType || ''
-        ) || 0;
+        );
+        
+        // If player stat not found, return null to prevent false settlement
+        if (currentValue === null || currentValue === undefined) {
+          console.error(`❌ [NBA-TRACKER] Player stat not found:`, {
+            betId,
+            player: betDetails.playerName,
+            stat: betDetails.statType
+          });
+          return null;
+        }
         
         const targetValue = betDetails.targetValue || 0;
         const isOver = betDetails.isOver || false;

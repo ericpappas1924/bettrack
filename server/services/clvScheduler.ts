@@ -81,6 +81,7 @@ async function updateBetCLV(bet: any, forceUpdate = false): Promise<{ updated: b
     const gameTime = bet.gameStartTime ? new Date(bet.gameStartTime).toLocaleString() : 'Unknown';
     console.log(`     Game: ${bet.game}`);
     console.log(`     Sport: ${bet.sport}`);
+    console.log(`     Bet Type: ${bet.betType}`);
     console.log(`     Team: ${bet.team}`);
     console.log(`     Start: ${gameTime}`);
     console.log(`     Opening Odds: ${bet.openingOdds}`);
@@ -88,7 +89,13 @@ async function updateBetCLV(bet: any, forceUpdate = false): Promise<{ updated: b
       console.log(`     Previous CLV: ${bet.clv}% (Odds: ${bet.closingOdds})`);
     }
     
-    // Validate game field
+    // Skip player props - they need special handling via the API endpoint
+    if (bet.betType === 'Player Prop' || bet.betType?.toLowerCase().includes('prop')) {
+      console.log(`     ⏭️  Skipping player prop - use /auto-fetch-clv endpoint for props`);
+      return { updated: false, skipped: true };
+    }
+    
+    // Validate game field for team bets
     const isValidGame = bet.game && 
                         bet.game.includes(' vs ') && 
                         bet.game.length > 10 &&
@@ -110,9 +117,9 @@ async function updateBetCLV(bet: any, forceUpdate = false): Promise<{ updated: b
       return { updated: false, error: errorMsg };
     }
 
-    console.log(`     🔍 Fetching current odds from Odds API...`);
+    console.log(`     🔍 Fetching current odds from Odds API (team bet)...`);
 
-    // Fetch current odds from Odds API
+    // Fetch current odds from Odds API (for team bets only)
     const currentOdds = await findClosingOdds(
       bet.game,
       bet.sport,

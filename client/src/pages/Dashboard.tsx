@@ -449,7 +449,7 @@ export default function Dashboard() {
       <header className="border-b sticky top-0 bg-background z-50">
         <div className="flex items-center justify-between px-4 py-3 max-w-7xl mx-auto">
           <div>
-            <h1 className="text-xl font-bold">BetTrack</h1>
+            <h1 className="text-lg sm:text-xl font-bold">BetTrack</h1>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -480,10 +480,10 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="px-4 py-6 max-w-7xl mx-auto">
+      <main className="px-3 sm:px-4 py-4 sm:py-6 max-w-7xl mx-auto">
         <div className="space-y-6">
           {/* Metrics Grid - Scrollable on mobile */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
             <MetricCard
               label="Total P/L"
               value={`${totalPL >= 0 ? "$" : "-$"}${Math.abs(totalPL).toFixed(2)}`}
@@ -523,7 +523,7 @@ export default function Dashboard() {
           {/* Bets Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Your Bets</h2>
+              <h2 className="text-base sm:text-lg font-semibold">Your Bets</h2>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} data-testid="button-import-bets">
                   <Upload className="h-4 w-4 md:mr-2" />

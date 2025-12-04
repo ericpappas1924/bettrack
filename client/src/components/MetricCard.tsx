@@ -16,13 +16,13 @@ interface MetricCardProps {
 export function MetricCard({ label, value, trend, icon, className }: MetricCardProps) {
   return (
     <Card className={className} data-testid={`card-metric-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <CardHeader className="flex flex-row items-center justify-between gap-1 sm:gap-2 space-y-0 pb-1.5 sm:pb-2">
+        <p className="text-xs sm:text-sm font-medium text-muted-foreground">{label}</p>
         {icon && <div className="text-muted-foreground">{icon}</div>}
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <p className="text-4xl font-bold tabular-nums" data-testid={`text-metric-value-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+          <p className="text-2xl sm:text-4xl font-bold tabular-nums" data-testid={`text-metric-value-${label.toLowerCase().replace(/\s+/g, '-')}`}>
             {value}
           </p>
           {trend && (

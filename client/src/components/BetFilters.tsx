@@ -51,7 +51,7 @@ export function BetFilters({
       {/* Filter Row */}
       <div className="flex gap-2 items-center flex-wrap">
         <Select value={sport} onValueChange={onSportChange}>
-          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-sport-filter">
+          <SelectTrigger className="w-[110px] sm:w-32" data-testid="select-sport-filter">
             <SelectValue placeholder="Sport" />
           </SelectTrigger>
           <SelectContent>
@@ -64,7 +64,7 @@ export function BetFilters({
         </Select>
 
         <Select value={gameStatus} onValueChange={onGameStatusChange}>
-          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-game-status-filter">
+          <SelectTrigger className="w-[110px] sm:w-32" data-testid="select-game-status-filter">
             <SelectValue placeholder="Game" />
           </SelectTrigger>
           <SelectContent>
@@ -76,7 +76,7 @@ export function BetFilters({
         </Select>
 
         <Select value={status} onValueChange={onStatusChange}>
-          <SelectTrigger className="w-32 min-w-[120px]" data-testid="select-status-filter">
+          <SelectTrigger className="w-[110px] sm:w-32" data-testid="select-status-filter">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>

@@ -71,7 +71,7 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[85vh] w-[95vw] sm:w-full flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {step === 'paste' ? 'Import Bets' : `Preview Import (${parsedBets.length} bets)`}

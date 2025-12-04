@@ -212,7 +212,9 @@ export async function findPlayerPropOdds(
     // NBA/NCAAB
     'points': 'player_points',
     'rebounds': 'player_rebounds',
+    'total rebounds': 'player_rebounds',
     'assists': 'player_assists',
+    'total assists': 'player_assists',
     'threes': 'player_threes',
     '3-pointers': 'player_threes',
     'steals': 'player_steals',
@@ -236,7 +238,7 @@ export async function findPlayerPropOdds(
     
     // Show sport-specific markets
     if (sport === 'NBA' || sport === 'NCAAB') {
-      console.log(`   Basketball: points, rebounds, assists, threes, steals, blocks, turnovers, pra`);
+      console.log(`   Basketball: points, rebounds, total rebounds, assists, total assists, threes, steals, blocks, turnovers, pra`);
     } else if (sport === 'NFL' || sport === 'NCAAF') {
       console.log(`   Football: passing yards, pass completions, rushing yards, receiving yards, receptions, carries`);
     } else if (sport === 'MLB') {

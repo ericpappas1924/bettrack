@@ -256,7 +256,14 @@ export async function findPlayerPropOdds(
   }
 
   // Step 5: Find the specific player and prop
-  const playerNameLower = playerName.toLowerCase();
+  // CRITICAL: Remove team code from player name if present
+  // "Russell Westbrook (SAC)" -> "Russell Westbrook"
+  const cleanPlayerName = playerName.replace(/\s*\([A-Z]{2,4}\)\s*$/i, '').trim();
+  const playerNameLower = cleanPlayerName.toLowerCase();
+  
+  if (cleanPlayerName !== playerName) {
+    console.log(`🔧 Cleaned player name: "${playerName}" -> "${cleanPlayerName}"`);
+  }
   
   // Collect all matching props across bookmakers
   const matchingProps: Array<{

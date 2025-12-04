@@ -446,6 +446,30 @@ const MARKET_TO_PROP_TYPE: Record<string, string> = {
 };
 
 /**
+ * Fetch player info by ID
+ */
+async function fetchPlayerById(playerId: number): Promise<BallDontLiePlayer | null> {
+  try {
+    const url = `${BALLDONTLIE_BASE_URL}/nba/v1/players/${playerId}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': BALLDONTLIE_API_KEY
+      }
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.data;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Fetch player props from BallDontLie V2 Odds API
  */
 async function fetchPlayerProps(gameId: number, propType?: string): Promise<PlayerProp[]> {
@@ -454,7 +478,7 @@ async function fetchPlayerProps(gameId: number, propType?: string): Promise<Play
   if (propType) console.log(`   Prop Type: ${propType}`);
   
   try {
-    let url = `${BALLDONTLIE_BASE_URL}/v2/odds/player_props?game_id=${gameId}`;
+    let url = `${BALLDONTLIE_BASE_URL}/v2/odds/player_props?game_id=${gameId}&per_page=100`;
     if (propType) {
       url += `&prop_type=${propType}`;
     }
@@ -502,22 +526,52 @@ export async function findNBAPlayerPropFromBallDontLie(
   // Step 1: Find the game
   const gameTeams = game.split(' vs ').map(t => t.trim());
   
-  // Search today and tomorrow (games can be on either day depending on timezone)
+  // Search yesterday, today, and tomorrow (games can span timezones)
   const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   
-  const todayStr = today.toISOString().split('T')[0];
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const datesToSearch = [
+    yesterday.toISOString().split('T')[0],
+    today.toISOString().split('T')[0],
+    tomorrow.toISOString().split('T')[0]
+  ];
   
-  console.log(`🔍 Searching for game on: ${todayStr} and ${tomorrowStr}`);
+  console.log(`🔍 Searching for game across: ${datesToSearch.join(', ')}`);
   
-  let nbaGames = await fetchNBAGames(todayStr);
+  let nbaGames: any[] = [];
+  let foundDate = '';
   
-  // If not found today, try tomorrow
+  for (const dateStr of datesToSearch) {
+    const games = await fetchNBAGames(dateStr);
+    if (games.length > 0) {
+      nbaGames = games;
+      foundDate = dateStr;
+      
+      // Check if our game is in this batch
+      const hasGame = games.some((g: any) => {
+        const home = g.home_team.full_name.toLowerCase();
+        const visitor = g.visitor_team.full_name.toLowerCase();
+        
+        return gameTeams.some(gt => {
+          const gtLower = gt.toLowerCase();
+          return home.includes(gtLower) || gtLower.includes(home) ||
+                 visitor.includes(gtLower) || gtLower.includes(visitor);
+        });
+      });
+      
+      if (hasGame) {
+        console.log(`   ✅ Found game on ${dateStr}`);
+        break;
+      }
+    }
+  }
+  
   if (nbaGames.length === 0) {
-    console.log(`   No games today, trying tomorrow...`);
-    nbaGames = await fetchNBAGames(tomorrowStr);
+    console.log(`❌ No games found in BallDontLie for searched dates`);
+    return null;
   }
   
   const matchingGame = nbaGames.find((g: any) => {
@@ -555,9 +609,47 @@ export async function findNBAPlayerPropFromBallDontLie(
   }
   
   // Step 4: Find props for this player
-  // Note: We need to match by player name since we don't have player_id
-  // BallDontLie returns player_id, so we need to fetch player names
   const playerNameLower = playerName.toLowerCase();
+  
+  console.log(`🔍 Matching props for "${playerName}"...`);
+  
+  // Get unique player IDs from props
+  const uniquePlayerIds = [...new Set(props.map(p => p.player_id))];
+  console.log(`   Found props for ${uniquePlayerIds.length} unique players`);
+  
+  // Fetch player names for each player_id
+  const playerIdToName = new Map<number, string>();
+  
+  for (const playerId of uniquePlayerIds.slice(0, 20)) { // Limit to avoid too many requests
+    const player = await fetchPlayerById(playerId);
+    if (player) {
+      const fullName = `${player.first_name} ${player.last_name}`;
+      playerIdToName.set(playerId, fullName);
+      
+      if (fullName.toLowerCase() === playerNameLower) {
+        console.log(`   ✅ Found player ID for ${playerName}: ${playerId}`);
+        break;
+      }
+    }
+  }
+  
+  // Find the player_id for our target player
+  let targetPlayerId: number | null = null;
+  
+  for (const [playerId, name] of playerIdToName.entries()) {
+    if (name.toLowerCase() === playerNameLower) {
+      targetPlayerId = playerId;
+      break;
+    }
+  }
+  
+  if (!targetPlayerId) {
+    console.log(`❌ Could not find player ID for "${playerName}"`);
+    console.log(`   Available players:`, Array.from(playerIdToName.values()).slice(0, 10));
+    return null;
+  }
+  
+  console.log(`✅ Matched "${playerName}" to player ID: ${targetPlayerId}`);
   
   // Group props by player and find matches
   const matchingProps: Array<{
@@ -568,6 +660,9 @@ export async function findNBAPlayerPropFromBallDontLie(
   }> = [];
   
   for (const prop of props) {
+    // Only props for our target player
+    if (prop.player_id !== targetPlayerId) continue;
+    
     // Filter for the correct market type (over_under only, not milestone)
     if (prop.market.type !== 'over_under') continue;
     
@@ -578,8 +673,6 @@ export async function findNBAPlayerPropFromBallDontLie(
     const line = parseFloat(prop.line_value);
     const lineDiff = targetLine ? Math.abs(line - targetLine) : 0;
     
-    // TODO: We need to match player_id to player name
-    // For now, collect all props and we'll need to enhance this
     matchingProps.push({
       odds,
       line,
@@ -589,10 +682,11 @@ export async function findNBAPlayerPropFromBallDontLie(
   }
   
   if (matchingProps.length === 0) {
-    console.log(`❌ No matching props found for player`);
-    console.log(`   Note: Player name matching needs player ID lookup`);
+    console.log(`❌ No matching props found for player ID ${targetPlayerId}`);
     return null;
   }
+  
+  console.log(`✅ Found ${matchingProps.length} matching props from different bookmakers`);
   
   // Sort by line difference (prefer exact match)
   matchingProps.sort((a, b) => a.lineDiff - b.lineDiff);

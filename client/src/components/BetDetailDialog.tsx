@@ -490,9 +490,9 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               <Separator />
               <div>
                 <p className="text-sm text-muted-foreground mb-1">
-                  {(bet.betType === 'Parlay' || bet.betType === 'Teaser') ? 'Legs' : 'Notes'}
+                  {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? 'Legs' : 'Notes'}
                 </p>
-                {(bet.betType === 'Parlay' || bet.betType === 'Teaser') ? (
+                {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? (
                   <ParlayLegsBadge notes={bet.notes} betType={bet.betType} />
                 ) : (
                   <p className="text-base whitespace-pre-line">{bet.notes}</p>

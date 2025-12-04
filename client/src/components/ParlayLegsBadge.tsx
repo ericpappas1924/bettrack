@@ -11,7 +11,7 @@ interface ParlayLegsBadgeProps {
 }
 
 export function ParlayLegsBadge({ notes, betType }: ParlayLegsBadgeProps) {
-  if (!notes || (betType !== 'Parlay' && betType !== 'Teaser')) {
+  if (!notes || (betType !== 'Parlay' && betType !== 'Teaser' && betType !== 'Player Prop Parlay')) {
     return null;
   }
 
@@ -77,11 +77,18 @@ export function ParlayLegsBadge({ notes, betType }: ParlayLegsBadgeProps) {
             statusClass = 'text-red-600 dark:text-red-400';
           }
 
-          // Extract just the bet details (remove date/sport prefix for display)
-          const betDetailsMatch = leg.match(/\[NFL\]\s*(.+)/);
-          const betDetails = betDetailsMatch ? betDetailsMatch[1] : leg;
+          // Extract bet details
+          // For parlays/teasers with dates: [DATE] [SPORT] BET_DETAILS
+          // For player prop parlays: Just BET_DETAILS
+          let betDetails = leg;
           
-          // Remove status tags from display (already shown with icon)
+          // Try to extract after [SPORT] tag if it exists
+          const sportPrefixMatch = leg.match(/\[(?:NFL|NBA|MLB|NHL|NCAAF|NCAAB)\]\s*(.+)/);
+          if (sportPrefixMatch) {
+            betDetails = sportPrefixMatch[1];
+          }
+          
+          // Remove status tags and scores from display (already shown with icon)
           const cleanDetails = betDetails
             .replace(/\[Won\]/g, '')
             .replace(/\[Lost\]/g, '')

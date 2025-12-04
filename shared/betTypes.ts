@@ -162,7 +162,9 @@ export function getSportFromText(text: string): Sport {
   // Football keywords
   const footballKeywords = [
     'TOUCHDOWN', 'TD', 'PASS COMPLETION', 'RUSHING YARD', 'RECEIVING YARD',
-    'CARRY', 'CARRIES', 'RECEPTION', 'INTERCEPTION', 'SACK', 'FIELD GOAL'
+    'PASSING YARD', 'PASS ATTEMPT', 'RUSHING ATTEMPT', // Added for player props
+    'CARRY', 'CARRIES', 'RECEPTION', 'INTERCEPTION', 'SACK', 'FIELD GOAL',
+    'QUARTERBACK', 'RUNNING BACK', 'WIDE RECEIVER', 'TIGHT END' // Position names
   ];
   
   // Basketball keywords
@@ -200,6 +202,7 @@ export function getSportFromText(text: string): Sport {
     
     // Check for common NCAAF teams (unique ones that don't conflict with NFL)
     const ncaafTeams = [
+      // Power 5 / Major programs
       'OHIO STATE', 'MICHIGAN WOLVERINES', 'ALABAMA', 'GEORGIA BULLDOGS', 'LSU', 'CLEMSON',
       'NOTRE DAME', 'UCLA', 'PENN STATE', 'OREGON DUCKS', 'FLORIDA GATORS',
       'TEXAS LONGHORNS', 'OKLAHOMA SOONERS', 'AUBURN', 'TENNESSEE VOLUNTEERS', 'FLORIDA STATE',
@@ -212,7 +215,15 @@ export function getSportFromText(text: string): Sport {
       'BOSTON COLLEGE', 'SYRACUSE', 'PITT', 'LOUISVILLE', 'RUTGERS',
       'PURDUE', 'ILLINOIS', 'INDIANA',
       'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO BUFFALOES', 'UTAH', 'BYU',
-      'UCF KNIGHTS', 'USC TROJANS', 'MIAMI HURRICANES'
+      'UCF KNIGHTS', 'USC TROJANS',
+      // Group of 5 / FCS / Smaller programs
+      'JAMES MADISON', 'TROY', 'APP STATE', 'APPALACHIAN STATE', 'COASTAL CAROLINA',
+      'MARSHALL', 'LIBERTY', 'MEMPHIS', 'TULANE', 'ARMY', 'NAVY', 'AIR FORCE',
+      'BOISE STATE', 'SAN DIEGO STATE', 'FRESNO STATE', 'UNLV', 'NEVADA',
+      'WYOMING', 'NEW MEXICO', 'COLORADO STATE', 'UTAH STATE',
+      'NORTH TEXAS', 'UAB', 'UTSA', 'FAU', 'FIU', 'MIDDLE TENNESSEE', 'WKU',
+      'WESTERN KENTUCKY', 'SOUTHERN MISS', 'LOUISIANA', 'SOUTH ALABAMA',
+      'ARKANSAS STATE', 'TEXAS STATE', 'OLD DOMINION', 'GEORGIA STATE', 'GEORGIA SOUTHERN'
     ];
     
     if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;

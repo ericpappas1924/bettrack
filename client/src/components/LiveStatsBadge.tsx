@@ -40,12 +40,47 @@ interface LiveStatsBadgeProps {
   compact?: boolean;
 }
 
+/**
+ * Parse game status to extract time remaining
+ * Examples: "Q3 6:07" → "Q3 6:07 left", "Final" → "Final"
+ */
+function parseTimeRemaining(gameStatus: string, sport: string): string {
+  // Handle completed games
+  if (gameStatus === 'Final' || gameStatus.includes('Final')) {
+    return 'Final';
+  }
+  
+  // NBA/NCAAB format: "Q3 6:07" or "OT 2:30"
+  const nbaMatch = gameStatus.match(/(Q[1-4]|OT\d?)\s+(\d+):(\d+)/);
+  if (nbaMatch) {
+    const [, quarter, mins, secs] = nbaMatch;
+    return `${quarter} ${mins}:${secs} left`;
+  }
+  
+  // NFL/NCAAF format: "3rd Quarter 8:23"
+  const nflMatch = gameStatus.match(/(\d+)(?:st|nd|rd|th)\s+Quarter\s+(\d+):(\d+)/i);
+  if (nflMatch) {
+    const [, quarter, mins, secs] = nflMatch;
+    return `Q${quarter} ${mins}:${secs} left`;
+  }
+  
+  // Halftime
+  if (gameStatus.toLowerCase().includes('halftime')) {
+    return 'Halftime';
+  }
+  
+  // Default: return as-is
+  return gameStatus;
+}
+
 export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProps) {
   if (!liveStat) {
     return null;
   }
 
-  const { betType, currentValue, targetValue, isOver, progress, gameStatus, isLive, isComplete, playerName, statType, status, currentScore, awayTeam, homeTeam, awayScore, homeScore } = liveStat;
+  const { betType, currentValue, targetValue, isOver, progress, gameStatus, isLive, isComplete, playerName, statType, status, currentScore, awayTeam, homeTeam, awayScore, homeScore, sport } = liveStat;
+  
+  const timeRemaining = parseTimeRemaining(gameStatus, sport || 'NBA');
   
   // Determine if bet is hitting based on status
   const isHitting = status === 'winning';
@@ -141,7 +176,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
           </div>
         </>
       )}
-      <p className="text-muted-foreground mt-2">{gameStatus}</p>
+      <p className="text-muted-foreground mt-2">{timeRemaining}</p>
     </div>
   );
 
@@ -158,7 +193,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
       return `${awayScore}-${homeScore}`;
     }
     
-    return gameStatus;
+    return timeRemaining;
   };
 
   if (compact) {
@@ -194,7 +229,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
           {isComplete && (isHitting ? 'WON' : 'LOST')}
           {!isLive && !isComplete && 'SCHEDULED'}
         </Badge>
-        <span className="text-sm text-muted-foreground">{gameStatus}</span>
+        <span className="text-sm text-muted-foreground">{timeRemaining}</span>
       </div>
 
       <div className="space-y-1">

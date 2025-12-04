@@ -593,10 +593,10 @@ export async function findClosingOdds(
 
   // Fetch odds for this specific event
   try {
-    const oddsData = await fetchEventOdds(matchingEvent.id, sportKey, [market]);
-    console.log(`   📊 Odds data bookmakers:`, oddsData.bookmakers.length);
+    const oddsData = await fetchEventPlayerProps(sportKey, matchingEvent.id, [market]);
+    console.log(`   📊 Odds data bookmakers:`, oddsData?.bookmakers?.length || 0);
     
-    if (!oddsData.bookmakers || oddsData.bookmakers.length === 0) {
+    if (!oddsData || !oddsData.bookmakers || oddsData.bookmakers.length === 0) {
       console.log(`   ⚠️  No bookmakers found for this market`);
       return null;
     }

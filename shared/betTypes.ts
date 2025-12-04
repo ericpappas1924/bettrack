@@ -131,7 +131,7 @@ export function getSportFromText(text: string): Sport {
   if (upper.includes('[MLB]') || upper === 'MLB') return SPORTS.MLB;
   if (upper.includes('[NHL]') || upper === 'NHL') return SPORTS.NHL;
   if (upper.includes('[CFB]') || upper.includes('[NCAAF]') || upper === 'CFB' || upper === 'NCAAF') return SPORTS.NCAAF;
-  if (upper.includes('[NCAAB]') || upper === 'NCAAB') return SPORTS.NCAAB;
+  if (upper.includes('[CBB]') || upper.includes('[NCAAB]') || upper === 'CBB' || upper === 'NCAAB') return SPORTS.NCAAB;
   if (upper.includes('[WNBA]') || upper === 'WNBA') return SPORTS.WNBA;
   if (upper.includes('[MLS]') || upper === 'MLS') return SPORTS.MLS;
   

@@ -134,6 +134,55 @@ function extractLiveBetDetails(block: string): {
 }
 
 function extractStraightBetDetails(block: string): { game: string; description: string; sport: Sport; gameStartTime: Date | null; incompleteMatchup?: boolean } {
+  // Try UFC/MMA format first (two-line format with event info)
+  // Format: [DATE] [MU] - EVENT INFO
+  //         [NUMBER] FIGHTER ODDS (FIGHTER1 vrs FIGHTER2)
+  const ufcMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*([^\n]+)\n.*?\[(\d+)\]\s*([^\n(]+)\(([^)]+)\)/s);
+  if (ufcMatch) {
+    const gameDate = ufcMatch[1];
+    const sportTag = ufcMatch[2];
+    const eventInfo = ufcMatch[3].trim();
+    const lineNum = ufcMatch[4];
+    const fighterAndOdds = ufcMatch[5].trim();
+    const matchupInParens = ufcMatch[6].trim();
+    
+    // Extract fighters from parentheses: "PETR YAN vrs MERAB DVALISHVILI"
+    const fightMatch = matchupInParens.match(/([A-Z\s]+?)\s+(?:vrs|vs)\s+([A-Z\s]+)/i);
+    let game = '';
+    if (fightMatch) {
+      const fighter1 = fightMatch[1].trim();
+      const fighter2 = fightMatch[2].trim();
+      game = `${fighter1} vs ${fighter2}`;
+    } else {
+      game = matchupInParens;
+    }
+    
+    const sport = getSportFromText(sportTag);
+    const betDetails = `${fighterAndOdds} (${matchupInParens})`;
+    
+    // Parse game start time
+    let gameStartTime: Date | null = null;
+    try {
+      const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+      if (dateTimeMatch) {
+        const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+        const months: { [key: string]: number } = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        let hour = parseInt(hours);
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        gameStartTime = new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes));
+      }
+    } catch (e) {
+      // If parsing fails, just leave as null
+    }
+    
+    return { game, description: betDetails, sport, gameStartTime, incompleteMatchup: false };
+  }
+  
+  // Regular straight bet format
   const straightMatch = block.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n$]+?)(?=\s*\n|Pending|$)/s);
   if (straightMatch) {
     const gameDate = straightMatch[1];

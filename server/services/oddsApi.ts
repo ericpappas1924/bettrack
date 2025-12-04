@@ -22,6 +22,8 @@ const SPORT_MAP: Record<string, string> = {
   'NCAAB': 'basketball_ncaab',
   'MLB': 'baseball_mlb',
   'NHL': 'icehockey_nhl',
+  'UFC': 'mma_mixed_martial_arts',
+  'MMA': 'mma_mixed_martial_arts',
 };
 
 interface OddsEvent {

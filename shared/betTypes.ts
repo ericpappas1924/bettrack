@@ -135,6 +135,11 @@ export function getSportFromText(text: string): Sport {
   if (upper.includes('[WNBA]') || upper === 'WNBA') return SPORTS.WNBA;
   if (upper.includes('[MLS]') || upper === 'MLS') return SPORTS.MLS;
   
+  // UFC/MMA detection
+  if (upper.includes('[MU]') || upper.includes('[UFC]') || upper === 'MU' || upper === 'UFC' || upper === 'MMA') return 'UFC';
+  if (upper.includes('UFC ') || upper.includes('UFC-') || upper.includes('UFC:')) return 'UFC';
+  if (upper.includes('BELLATOR') || upper.includes('PFL') || upper.includes('ONE CHAMPIONSHIP')) return 'UFC'; // MMA variations
+  
   // 2. Esports detection
   if (upper.includes('E-SPORTS') || upper.includes('ESPORTS')) {
     if (upper.includes('CS 2') || upper.includes('CS2') || upper.includes('COUNTER-STRIKE')) return SPORTS.CS2;

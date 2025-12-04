@@ -46,41 +46,32 @@ export default function Dashboard() {
     queryKey: ["/api/bets"],
   });
 
-  // Fetch live stats for ALL active bets that are currently live
-  const { data: liveStats = [], refetch: refetchLiveStats } = useQuery<LiveStat[]>({
-    queryKey: ["/api/bets/live-stats"],
-    refetchInterval: 60000, // Refetch every 60 seconds
-    enabled: (() => {
-      const liveBets = bets.filter((bet) => {
-        if (bet.status !== "active" || !bet.gameStartTime) return false;
-        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-        return gameStatus === 'live';
-      });
-      
-      if (liveBets.length > 0) {
-        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
-      }
-      
-      return liveBets.length > 0;
-    })(),
+  // Check if any bets are currently live
+  const liveBets = bets.filter((bet) => {
+    if (bet.status !== "active" || !bet.gameStartTime) return false;
+    const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+    return gameStatus === 'live';
   });
+  
+  const hasLiveBets = liveBets.length > 0;
 
-  // Auto-refresh live stats periodically for all bet types
+  // Fetch live stats - only polls when there are actually live games
+  const { data: liveStats = [] } = useQuery<LiveStat[]>({
+    queryKey: ["/api/bets/live-stats"],
+    // Smart polling: 30 sec if live games, disabled otherwise
+    refetchInterval: hasLiveBets ? 30000 : false,
+    enabled: hasLiveBets,
+  });
+  
+  // Log when live tracking starts/stops
   useEffect(() => {
-    const hasLiveBets = bets.some((bet) => {
-      if (bet.status !== "active" || !bet.gameStartTime) return false;
-      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-      return gameStatus === 'live';
-    });
-    
     if (hasLiveBets) {
-      const interval = setInterval(() => {
-        refetchLiveStats();
-      }, 60000); // Every 60 seconds
-      
-      return () => clearInterval(interval);
+      console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
     }
-  }, [bets, refetchLiveStats]);
+  }, [hasLiveBets, liveBets.length]);
+
+  // NOTE: Live stats polling is handled by React Query's refetchInterval above
+  // No need for separate setInterval - would cause duplicate API calls
 
   // Auto-refresh game status badges every 60 seconds
   // This forces re-render to update pregame/live/completed status without API calls
@@ -93,50 +84,9 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-settle completed bets every 5 minutes
-  useEffect(() => {
-    const completedBets = bets.filter((bet) => {
-      if (bet.status !== "active" || !bet.gameStartTime) return false;
-      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-      return gameStatus === 'completed';
-    });
-    
-    if (completedBets.length > 0) {
-      console.log(`🎯 [DASHBOARD] Completed bets detected - enabling auto-settlement`, {
-        count: completedBets.length,
-        games: completedBets.map(b => b.game)
-      });
-      
-      // Settle immediately on first detection
-      apiRequest("POST", "/api/bets/auto-settle")
-        .then(() => {
-          console.log('✅ [DASHBOARD] Initial auto-settlement completed');
-          queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
-        })
-        .catch((error) => {
-          console.error('❌ [DASHBOARD] Initial auto-settlement error:', error);
-        });
-      
-      // Then check every 5 minutes
-      const interval = setInterval(async () => {
-        try {
-          console.log('🔄 [DASHBOARD] Running scheduled auto-settlement...');
-          await apiRequest("POST", "/api/bets/auto-settle");
-          queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
-          console.log('✅ [DASHBOARD] Scheduled auto-settlement completed');
-        } catch (error) {
-          console.error('❌ [DASHBOARD] Scheduled auto-settlement error:', error);
-        }
-      }, 5 * 60 * 1000); // Every 5 minutes
-      
-      return () => {
-        console.log('🛑 [DASHBOARD] Clearing auto-settlement interval');
-        clearInterval(interval);
-      };
-    } else {
-      console.log('ℹ️  [DASHBOARD] No completed bets - auto-settlement disabled');
-    }
-  }, [bets]);
+  // NOTE: Auto-settlement now runs SERVER-SIDE every 5 minutes
+  // No client-side timer needed - server handles it automatically!
+  // See: server/services/autoSettlementScheduler.ts
 
   const importMutation = useMutation({
     mutationFn: async (importedBets: any[]) => {

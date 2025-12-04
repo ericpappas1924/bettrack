@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { startCLVScheduler } from "./services/clvScheduler";
+import { startAutoSettlementScheduler } from "./services/autoSettlementScheduler";
 
 const app = express();
 const httpServer = createServer(app);
@@ -111,8 +112,9 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
       
-      // Start CLV scheduler after server is running
+      // Start background schedulers after server is running
       startCLVScheduler();
+      startAutoSettlementScheduler();
     },
   );
 })();

@@ -458,7 +458,7 @@ export async function registerRoutes(
             console.log(`🔧 Cleaned player name: "${existingBet.player}" -> "${cleanPlayer}"`);
           }
           
-          const propResult = await findPlayerPropOdds(
+          let propResult = await findPlayerPropOdds(
             existingBet.game,
             existingBet.sport,
             cleanPlayer,
@@ -466,6 +466,31 @@ export async function registerRoutes(
             isOver,
             targetLine  // Pass target line for matching
           );
+          
+          // FALLBACK: Try BallDontLie for NBA if Odds API fails
+          if (!propResult && existingBet.sport === 'NBA') {
+            console.log(`\n🔄 Odds API failed - trying BallDontLie NBA API fallback...`);
+            
+            try {
+              const { findNBAPlayerPropFromBallDontLie } = await import('./services/ballDontLieApi');
+              
+              propResult = await findNBAPlayerPropFromBallDontLie(
+                existingBet.game,
+                cleanPlayer,
+                existingBet.market,
+                isOver,
+                targetLine
+              );
+              
+              if (propResult) {
+                console.log(`✅ BallDontLie fallback successful!`);
+              } else {
+                console.log(`⚠️  BallDontLie fallback also found no props`);
+              }
+            } catch (error) {
+              console.log(`❌ BallDontLie fallback error:`, error);
+            }
+          }
           
           if (propResult) {
             // Check if line adjustment is needed

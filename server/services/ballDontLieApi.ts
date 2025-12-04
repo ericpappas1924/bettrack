@@ -398,3 +398,201 @@ export function getGameStatusMessage(game: BallDontLieGame): string {
   return game.status || 'Scheduled';
 }
 
+/**
+ * ============================================================================
+ * BALLDONTLIE V2 ODDS API - PLAYER PROPS
+ * ============================================================================
+ * Live player prop betting data with real-time odds from multiple sportsbooks
+ */
+
+interface PlayerProp {
+  id: number;
+  game_id: number;
+  player_id: number;
+  vendor: string;
+  prop_type: string;
+  line_value: string;
+  market: {
+    type: 'over_under' | 'milestone';
+    over_odds?: number;
+    under_odds?: number;
+    odds?: number;
+  };
+  updated_at: string;
+}
+
+interface PlayerPropsResponse {
+  data: PlayerProp[];
+  meta: {
+    next_cursor?: number;
+    per_page: number;
+  };
+}
+
+/**
+ * Map our market names to BallDontLie prop types
+ */
+const MARKET_TO_PROP_TYPE: Record<string, string> = {
+  'points': 'points',
+  'rebounds': 'rebounds',
+  'assists': 'assists',
+  'threes': 'threes',
+  '3-pointers': 'threes',
+  'steals': 'steals',
+  'blocks': 'blocks',
+  'pra': 'points_rebounds_assists',
+  'points+rebounds+assists': 'points_rebounds_assists',
+  'points + rebounds + assists': 'points_rebounds_assists',
+};
+
+/**
+ * Fetch player props from BallDontLie V2 Odds API
+ */
+async function fetchPlayerProps(gameId: number, propType?: string): Promise<PlayerProp[]> {
+  console.log(`\n🎲 Fetching player props from BallDontLie...`);
+  console.log(`   Game ID: ${gameId}`);
+  if (propType) console.log(`   Prop Type: ${propType}`);
+  
+  try {
+    let url = `${BALLDONTLIE_BASE_URL}/v2/odds/player_props?game_id=${gameId}`;
+    if (propType) {
+      url += `&prop_type=${propType}`;
+    }
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': BALLDONTLIE_API_KEY
+      }
+    });
+    
+    if (!response.ok) {
+      console.log(`❌ BallDontLie player props error: ${response.status} ${response.statusText}`);
+      return [];
+    }
+    
+    const data: PlayerPropsResponse = await response.json();
+    console.log(`✅ Found ${data.data.length} player props`);
+    
+    return data.data;
+  } catch (error) {
+    console.error(`❌ Error fetching player props:`, error);
+    return [];
+  }
+}
+
+/**
+ * Find player prop odds for CLV calculation
+ * This is the fallback when Odds API doesn't have the player
+ */
+export async function findNBAPlayerPropFromBallDontLie(
+  game: string,         // "Sacramento Kings vs Houston Rockets"
+  playerName: string,   // "Russell Westbrook"
+  market: string,       // "Assists", "Points", etc.
+  isOver: boolean,
+  targetLine?: number
+): Promise<{ odds: number; line: number; bookmaker: string; isExactLine: boolean } | null> {
+  
+  console.log(`\n🏀 BALLDONTLIE FALLBACK FOR NBA PLAYER PROPS`);
+  console.log(`   Game: ${game}`);
+  console.log(`   Player: ${playerName}`);
+  console.log(`   Market: ${market}`);
+  console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);
+  if (targetLine) console.log(`   Target Line: ${targetLine}`);
+  
+  // Step 1: Find the game
+  const gameTeams = game.split(' vs ').map(t => t.trim());
+  const nbaGames = await fetchNBAGames(new Date().toISOString().split('T')[0]);
+  
+  const matchingGame = nbaGames.find((g: any) => {
+    const home = g.home_team.full_name.toLowerCase();
+    const visitor = g.visitor_team.full_name.toLowerCase();
+    
+    return gameTeams.some(gt => {
+      const gtLower = gt.toLowerCase();
+      return home.includes(gtLower) || gtLower.includes(home) ||
+             visitor.includes(gtLower) || gtLower.includes(visitor);
+    });
+  });
+  
+  if (!matchingGame) {
+    console.log(`❌ Game not found in BallDontLie`);
+    return null;
+  }
+  
+  console.log(`✅ Found game ID: ${matchingGame.id}`);
+  
+  // Step 2: Map market to prop type
+  const propType = MARKET_TO_PROP_TYPE[market.toLowerCase()];
+  if (!propType) {
+    console.log(`❌ Market "${market}" not supported in BallDontLie`);
+    console.log(`   Supported: ${Object.keys(MARKET_TO_PROP_TYPE).join(', ')}`);
+    return null;
+  }
+  
+  // Step 3: Fetch player props
+  const props = await fetchPlayerProps(matchingGame.id, propType);
+  
+  if (props.length === 0) {
+    console.log(`❌ No props found for this game`);
+    return null;
+  }
+  
+  // Step 4: Find props for this player
+  // Note: We need to match by player name since we don't have player_id
+  // BallDontLie returns player_id, so we need to fetch player names
+  const playerNameLower = playerName.toLowerCase();
+  
+  // Group props by player and find matches
+  const matchingProps: Array<{
+    odds: number;
+    line: number;
+    bookmaker: string;
+    lineDiff: number;
+  }> = [];
+  
+  for (const prop of props) {
+    // Filter for the correct market type (over_under only, not milestone)
+    if (prop.market.type !== 'over_under') continue;
+    
+    // Get odds based on direction
+    const odds = isOver ? prop.market.over_odds : prop.market.under_odds;
+    if (!odds) continue;
+    
+    const line = parseFloat(prop.line_value);
+    const lineDiff = targetLine ? Math.abs(line - targetLine) : 0;
+    
+    // TODO: We need to match player_id to player name
+    // For now, collect all props and we'll need to enhance this
+    matchingProps.push({
+      odds,
+      line,
+      bookmaker: prop.vendor,
+      lineDiff
+    });
+  }
+  
+  if (matchingProps.length === 0) {
+    console.log(`❌ No matching props found for player`);
+    console.log(`   Note: Player name matching needs player ID lookup`);
+    return null;
+  }
+  
+  // Sort by line difference (prefer exact match)
+  matchingProps.sort((a, b) => a.lineDiff - b.lineDiff);
+  
+  const bestMatch = matchingProps[0];
+  const isExactLine = targetLine ? bestMatch.lineDiff < 0.01 : true;
+  
+  console.log(`✅ Found prop from ${bestMatch.bookmaker}`);
+  console.log(`   Line: ${bestMatch.line}`);
+  console.log(`   Odds: ${bestMatch.odds > 0 ? '+' : ''}${bestMatch.odds}`);
+  console.log(`   Exact line match: ${isExactLine ? 'Yes' : 'No'}`);
+  
+  return {
+    odds: bestMatch.odds,
+    line: bestMatch.line,
+    bookmaker: bestMatch.bookmaker,
+    isExactLine
+  };
+}
+

@@ -222,6 +222,8 @@ export async function findPlayerPropOdds(
     'turnovers': 'player_turnovers',
     'pra': 'player_points_rebounds_assists',
     'points+rebounds+assists': 'player_points_rebounds_assists',
+    'pts + reb + ast': 'player_points_rebounds_assists',
+    'points + rebounds + assists': 'player_points_rebounds_assists',
     
     // MLB
     'strikeouts': 'pitcher_strikeouts',
@@ -238,7 +240,7 @@ export async function findPlayerPropOdds(
     
     // Show sport-specific markets
     if (sport === 'NBA' || sport === 'NCAAB') {
-      console.log(`   Basketball: points, rebounds, total rebounds, assists, total assists, threes, steals, blocks, turnovers, pra`);
+      console.log(`   Basketball: points, rebounds, total rebounds, assists, total assists, threes, steals, blocks, turnovers, pra, pts + reb + ast`);
     } else if (sport === 'NFL' || sport === 'NCAAF') {
       console.log(`   Football: passing yards, pass completions, rushing yards, receiving yards, receptions, carries`);
     } else if (sport === 'MLB') {

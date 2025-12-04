@@ -427,18 +427,20 @@ export async function registerRoutes(
       
       // Try to find current odds from Odds API
       const { findClosingOdds, findPlayerPropOdds, calculateCLV } = await import('./services/oddsApi');
+      const { calculateCLVWithLineAdjustment } = await import('./services/lineAdjustment');
       
       console.log(`\n🔍 Fetching current odds from Odds API...`);
       console.log(`Bet Type: ${existingBet.betType}`);
       
       let currentOdds: number | null = null;
+      let lineAdjustmentInfo: any = null;
       
       // Check if this is a player prop
       if (existingBet.betType === 'Player Prop') {
         console.log(`📊 Detected player prop - using event-based API`);
         
         // NEW: Use structured fields if available
-        if (existingBet.player && existingBet.market && existingBet.overUnder) {
+        if (existingBet.player && existingBet.market && existingBet.overUnder && existingBet.line) {
           console.log(`✅ Using structured player prop fields:`);
           console.log(`   Player: ${existingBet.player}`);
           console.log(`   Team: ${existingBet.playerTeam || 'N/A'}`);
@@ -447,14 +449,46 @@ export async function registerRoutes(
           console.log(`   Line: ${existingBet.line}`);
           
           const isOver = existingBet.overUnder === 'Over';
+          const targetLine = parseFloat(existingBet.line);
           
-          currentOdds = await findPlayerPropOdds(
+          const propResult = await findPlayerPropOdds(
             existingBet.game,
             existingBet.sport,
             existingBet.player,
             existingBet.market,
-            isOver
+            isOver,
+            targetLine  // Pass target line for matching
           );
+          
+          if (propResult) {
+            // Check if line adjustment is needed
+            if (!propResult.isExactLine) {
+              console.log(`\n📐 LINE ADJUSTMENT REQUIRED:`);
+              console.log(`   Your line: ${targetLine}`);
+              console.log(`   Market line: ${propResult.line}`);
+              console.log(`   Market odds: ${propResult.odds > 0 ? '+' : ''}${propResult.odds}`);
+              
+              const openingOdds = parseInt(existingBet.openingOdds.replace(/[^-\d]/g, ''));
+              lineAdjustmentInfo = calculateCLVWithLineAdjustment(
+                openingOdds,
+                targetLine,
+                propResult.odds,
+                propResult.line,
+                existingBet.sport,
+                existingBet.market,
+                isOver
+              );
+              
+              currentOdds = lineAdjustmentInfo.adjustedOdds;
+              
+              console.log(`   Adjusted to your line: ${currentOdds > 0 ? '+' : ''}${currentOdds}`);
+              console.log(`   Confidence: ${lineAdjustmentInfo.confidence.toUpperCase()}`);
+              console.log(`   Method: ${lineAdjustmentInfo.explanation}`);
+            } else {
+              currentOdds = propResult.odds;
+              console.log(`✅ Exact line match - no adjustment needed`);
+            }
+          }
         } else {
           // FALLBACK: Parse from team field (for older bets)
           console.log(`⚠️  No structured fields - falling back to team field parsing`);
@@ -509,13 +543,21 @@ export async function registerRoutes(
           console.log(`   Direction: ${isOver ? 'Over' : 'Under'}`);
           console.log(`   Stat Type: ${statType}`);
           
-            currentOdds = await findPlayerPropOdds(
+            const propResult = await findPlayerPropOdds(
               existingBet.game,
               existingBet.sport,
               playerName,
               statType,
               isOver
             );
+            
+            if (propResult) {
+              currentOdds = propResult.odds;
+              // Note: Can't do line adjustment for fallback parsing since we don't have the line stored
+              if (!propResult.isExactLine) {
+                console.log(`   ⚠️  Line may not match (fallback parsing doesn't have line info)`);
+              }
+            }
           } else {
             console.log(`⚠️  Could not parse player prop details from: "${existingBet.team}"`);
           }
@@ -548,26 +590,52 @@ export async function registerRoutes(
       
       console.log(`✅ Found current odds: ${currentOdds}`);
       
-      // Calculate CLV
+      // Calculate CLV (use line-adjusted CLV if available)
       const openingOdds = parseInt(existingBet.openingOdds.replace(/[^-\d]/g, ''));
-      const clv = calculateCLV(openingOdds, currentOdds);
+      let clv: number;
+      let notes = '';
+      
+      if (lineAdjustmentInfo) {
+        // Use the CLV from line adjustment (already calculated)
+        clv = lineAdjustmentInfo.clv;
+        notes = `Line adjusted: ${lineAdjustmentInfo.explanation}. Confidence: ${lineAdjustmentInfo.confidence}`;
+        
+        if (lineAdjustmentInfo.warning) {
+          notes += `. ${lineAdjustmentInfo.warning}`;
+        }
+      } else {
+        // Standard CLV calculation
+        clv = calculateCLV(openingOdds, currentOdds);
+      }
       
       // Calculate Expected Value (EV) in dollars
       const stakeNum = parseFloat(existingBet.stake);
       const expectedValue = stakeNum * (clv / 100);
       
       console.log(`📊 Opening Odds: ${openingOdds}`);
-      console.log(`📊 Current Odds: ${currentOdds}`);
+      console.log(`📊 Current/Adjusted Odds: ${currentOdds}`);
       console.log(`📊 Stake: $${stakeNum.toFixed(2)}`);
-      console.log(`📊 CLV: ${clv.toFixed(2)}%`);
-      console.log(`📊 Expected Value: $${expectedValue.toFixed(2)}`);
+      console.log(`📊 CLV: ${clv > 0 ? '+' : ''}${clv.toFixed(2)}%`);
+      console.log(`📊 Expected Value: $${expectedValue > 0 ? '+' : ''}${expectedValue.toFixed(2)}`);
+      
+      if (lineAdjustmentInfo) {
+        console.log(`📐 Line Adjustment: ${lineAdjustmentInfo.explanation}`);
+        console.log(`📊 Confidence: ${lineAdjustmentInfo.confidence.toUpperCase()}`);
+      }
       
       // Update bet with current odds, CLV, and EV
-      const updatedBet = await storage.updateBet(existingBet.id, {
+      const updateData: any = {
         closingOdds: currentOdds > 0 ? `+${currentOdds}` : `${currentOdds}`,
         clv: clv.toFixed(2),
         expectedValue: expectedValue.toFixed(2),
-      });
+      };
+      
+      // Add line adjustment note if applicable
+      if (notes) {
+        updateData.notes = existingBet.notes ? `${existingBet.notes}\n\n${notes}` : notes;
+      }
+      
+      const updatedBet = await storage.updateBet(existingBet.id, updateData);
       
       console.log(`✅ Bet updated successfully`);
       console.log(`========== AUTO-FETCH CLV COMPLETE ==========\n`);

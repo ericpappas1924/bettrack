@@ -137,15 +137,27 @@ const fetchEventPlayerProps = memoize(
 );
 
 /**
+ * Result from finding player prop odds
+ */
+export interface PlayerPropOddsResult {
+  odds: number;
+  line: number;
+  bookmaker: string;
+  isExactLine: boolean;
+}
+
+/**
  * Find a specific player's prop odds
+ * Now returns line information for adjustment purposes
  */
 export async function findPlayerPropOdds(
   game: string,         // "San Francisco 49ers vs Cleveland Browns"
   sport: string,        // "NFL"
   playerName: string,   // "Shedeur Sanders"
   statType: string,     // "passing yards", "rushing yards", "receptions"
-  isOver: boolean       // true for Over, false for Under
-): Promise<number | null> {
+  isOver: boolean,      // true for Over, false for Under
+  targetLine?: number   // Optional: the line you're looking for
+): Promise<PlayerPropOddsResult | null> {
   
   console.log(`\n========== FINDING PLAYER PROP ==========`);
   console.log(`Game: ${game}`);
@@ -246,29 +258,65 @@ export async function findPlayerPropOdds(
   // Step 5: Find the specific player and prop
   const playerNameLower = playerName.toLowerCase();
   
+  // Collect all matching props across bookmakers
+  const matchingProps: Array<{
+    odds: number;
+    line: number;
+    bookmaker: string;
+    lineDiff: number;
+  }> = [];
+  
   for (const bookmaker of eventOdds.bookmakers) {
     const propMarket = bookmaker.markets.find(m => m.key === market);
     if (!propMarket) continue;
 
-    // Find the outcome matching player name and over/under
-    const outcome = propMarket.outcomes.find(o => 
+    // Find all outcomes matching player name and over/under
+    const outcomes = propMarket.outcomes.filter(o => 
       o.description.toLowerCase().includes(playerNameLower) &&
       ((isOver && o.name === 'Over') || (!isOver && o.name === 'Under'))
     );
 
-    if (outcome) {
-      console.log(`✅ Found ${playerName} ${statType} ${isOver ? 'Over' : 'Under'} ${outcome.point}`);
-      console.log(`   Odds: ${outcome.price > 0 ? '+' : ''}${outcome.price}`);
-      console.log(`   Bookmaker: ${bookmaker.title}`);
-      console.log(`=========================================\n`);
-      return outcome.price;
+    for (const outcome of outcomes) {
+      const lineDiff = targetLine ? Math.abs(outcome.point - targetLine) : 0;
+      matchingProps.push({
+        odds: outcome.price,
+        line: outcome.point,
+        bookmaker: bookmaker.title,
+        lineDiff
+      });
     }
   }
 
-  console.log(`❌ Player prop not found for ${playerName}`);
-  console.log(`   Available players:`, eventOdds.bookmakers[0].markets[0]?.outcomes.map(o => o.description).slice(0, 5));
+  if (matchingProps.length === 0) {
+    console.log(`❌ Player prop not found for ${playerName}`);
+    console.log(`   Available players:`, eventOdds.bookmakers[0].markets[0]?.outcomes.map(o => o.description).slice(0, 5));
+    console.log(`=========================================\n`);
+    return null;
+  }
+
+  // Sort by line difference (prefer exact match, then closest)
+  matchingProps.sort((a, b) => a.lineDiff - b.lineDiff);
+  
+  const bestMatch = matchingProps[0];
+  const isExactLine = targetLine ? bestMatch.lineDiff < 0.01 : true;
+  
+  console.log(`✅ Found ${playerName} ${statType} ${isOver ? 'Over' : 'Under'} ${bestMatch.line}`);
+  console.log(`   Odds: ${bestMatch.odds > 0 ? '+' : ''}${bestMatch.odds}`);
+  console.log(`   Bookmaker: ${bestMatch.bookmaker}`);
+  
+  if (targetLine && !isExactLine) {
+    console.log(`   ⚠️  Line mismatch: Looking for ${targetLine}, found ${bestMatch.line}`);
+    console.log(`   Will adjust odds for line difference`);
+  }
+  
   console.log(`=========================================\n`);
-  return null;
+  
+  return {
+    odds: bestMatch.odds,
+    line: bestMatch.line,
+    bookmaker: bestMatch.bookmaker,
+    isExactLine
+  };
 }
 
 /**

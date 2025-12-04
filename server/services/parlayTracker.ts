@@ -21,21 +21,32 @@ interface ParlayLeg {
 }
 
 /**
- * Parse parlay legs from raw bet text
- * Extracts full details including dates, sports, teams
+ * Parse parlay legs from bet notes
+ * Legs are stored in notes with format: [DATE] [SPORT] BET_DETAILS
  */
-export function parseParlayLegsFromText(betText: string): ParlayLeg[] {
+export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
   const legs: ParlayLeg[] = [];
   
-  // Pattern: [DATE TIME] [SPORT] - [NUMBER] BET DETAILS
-  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\[\n]+?)(?=\s*\[|$)/g;
-  let match;
+  // Each line in notes is a leg (skip metadata lines)
+  const lines = notes.split('\n').filter((l: string) => {
+    const trimmed = l.trim();
+    return trimmed && 
+           !trimmed.startsWith('Category:') && 
+           !trimmed.startsWith('League:') &&
+           !trimmed.startsWith('Game ID:') &&
+           !trimmed.startsWith('Auto-settled:');
+  });
   
-  while ((match = legPattern.exec(betText)) !== null) {
-    const dateStr = match[1]; // e.g., "Dec-01-2025 08:16 PM"
-    const sportTag = match[2]; // e.g., "NFL"
-    const lineNum = match[3];
-    let betDetails = match[4].trim(); // e.g., "NE PATRIOTS +½-110 (B+7½)"
+  for (const legLine of lines) {
+    // Pattern: [DATE TIME] [SPORT] BET DETAILS
+    const legMatch = legLine.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*(.+)/);
+    if (!legMatch) {
+      console.log(`   ⚠️  Could not parse leg: ${legLine}`);
+      continue;
+    }
+    const dateStr = legMatch[1]; // e.g., "Dec-07-2025 01:00 PM"
+    const sportTag = legMatch[2]; // e.g., "NFL"
+    let betDetails = legMatch[3].trim(); // e.g., "WAS COMMANDERS +2-110"
     
     // Remove status tags
     betDetails = betDetails.replace(/\[Won\]|\[Pending\]|\[Lost\]|\(Score:[^)]+\)/gi, '').trim();
@@ -59,14 +70,33 @@ export function parseParlayLegsFromText(betText: string): ParlayLeg[] {
       console.log(`   ⚠️  Could not parse date: ${dateStr}`);
     }
     
-    // Extract team name (before +/- odds)
-    const teamMatch = betDetails.match(/^([A-Z\s]+?)(?:\s+[+-])/);
-    if (!teamMatch) {
+    // Extract team name
+    let team = '';
+    
+    // Check if this is a total bet with teams in parentheses
+    // e.g., "TOTAL o47-110 (B+7½) (DAL COWBOYS vrs DET LIONS)"
+    const totalWithTeamsMatch = betDetails.match(/TOTAL\s+[ou][\d½.]+.*?\([^)]*\)\s*\(([^)]+)\)/i);
+    if (totalWithTeamsMatch) {
+      // Extract teams from second parentheses
+      const teamsStr = totalWithTeamsMatch[1];
+      const teamsParts = teamsStr.split(/\s+(?:vrs|vs)\s+/i);
+      if (teamsParts.length >= 2) {
+        // Use both teams as the "game"
+        team = `${teamsParts[0].trim()} vs ${teamsParts[1].trim()}`;
+      }
+    } else {
+      // Regular format - team name before +/- odds
+      const teamMatch = betDetails.match(/^([A-Z\s]+?)(?:\s+[+-])/);
+      if (teamMatch) {
+        team = teamMatch[1].trim();
+      }
+    }
+    
+    if (!team) {
       console.log(`   ⚠️  Could not parse team from: ${betDetails}`);
       continue;
     }
     
-    const team = teamMatch[1].trim();
     const sport = sportTag.toUpperCase();
     
     // Determine bet type and extract details
@@ -102,7 +132,18 @@ export function parseParlayLegsFromText(betText: string): ParlayLeg[] {
     // Check for totals (TOTAL o/u pattern)
     if (betDetails.toUpperCase().includes('TOTAL')) {
       betType = 'Total';
-      overUnder = betDetails.toUpperCase().includes('O') ? 'Over' : 'Under';
+      
+      // Extract total line: "TOTAL o47-110" or "TOTAL u50-110"
+      const totalLineMatch = betDetails.match(/TOTAL\s+([ou])([\d½.]+)/i);
+      if (totalLineMatch) {
+        overUnder = totalLineMatch[1].toLowerCase() === 'o' ? 'Over' : 'Under';
+        line = parseFloat(totalLineMatch[2].replace('½', '.5'));
+        
+        // Apply teaser adjustment if present
+        if (teaserAdjustment !== undefined) {
+          line = line + teaserAdjustment;
+        }
+      }
     }
     
     legs.push({
@@ -134,21 +175,30 @@ async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; is
     return null;
   }
   
-  // Find the game by team + date
-  const game = await findGameByTeamAndDate(leg.sport, leg.team, leg.gameDate);
-  if (!game) {
-    console.log(`      ❌ Game not found for ${leg.team} on ${leg.gameDate.toLocaleDateString()}`);
-    return null;
-  }
+  let fullMatchup = '';
   
-  console.log(`      ✅ Found game: ${game.awayTeam} vs ${game.homeTeam}`);
+  // If team already contains "vs", it's a full matchup (from totals with teams in parens)
+  if (leg.team.includes(' vs ')) {
+    fullMatchup = leg.team;
+    console.log(`      ✅ Using full matchup: ${fullMatchup}`);
+  } else {
+    // Find the game by team + date
+    const game = await findGameByTeamAndDate(leg.sport, leg.team, leg.gameDate);
+    if (!game) {
+      console.log(`      ❌ Game not found for ${leg.team} on ${leg.gameDate.toLocaleDateString()}`);
+      return null;
+    }
+    
+    fullMatchup = `${game.awayTeam} vs ${game.homeTeam}`;
+    console.log(`      ✅ Found game: ${fullMatchup}`);
+  }
   
   // Create temporary bet object for tracking
   const tempBet = {
     id: 'parlay-leg-temp',
     sport: leg.sport,
-    game: `${game.awayTeam} vs ${game.homeTeam}`,
-    team: leg.team,
+    game: fullMatchup,
+    team: leg.team.includes(' vs ') ? 'TOTAL' : leg.team, // For totals, use "TOTAL" as team
     betType: leg.betType,
     status: 'active',
     gameStartTime: leg.gameDate
@@ -174,29 +224,21 @@ async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; is
  * Auto-settle parlay or teaser bet
  * Only settles if ALL legs are complete
  */
-export async function autoSettleParlayBet(bet: any, rawBetText?: string): Promise<boolean> {
+export async function autoSettleParlayBet(bet: any): Promise<boolean> {
   const betId = bet.id.substring(0, 8);
   console.log(`\n🎯 [PARLAY-TRACKER] Processing ${bet.betType} bet ${betId}`);
   
-  // Parse legs from raw text (need full bet text with dates)
-  // If rawBetText not provided, try to parse from notes
-  let legs: ParlayLeg[];
-  
-  if (rawBetText) {
-    legs = parseParlayLegsFromText(rawBetText);
-  } else if (bet.externalId) {
-    // Try to get original bet text from notes
-    // This is a limitation - we need the raw text with dates
-    console.log(`   ⚠️  No raw bet text provided - cannot parse legs with dates`);
-    console.log(`   💡 Parlay auto-settlement requires original bet text to extract leg dates`);
-    return false;
-  } else {
-    console.log(`   ❌ Cannot parse legs without raw bet text`);
+  // Parse legs from notes (they have format: [DATE] [SPORT] BET_DETAILS)
+  if (!bet.notes) {
+    console.log(`   ❌ No notes found - cannot parse legs`);
     return false;
   }
   
+  const legs = parseParlayLegsFromNotes(bet.notes);
+  
   if (legs.length === 0) {
-    console.log(`   ❌ No legs found in bet text`);
+    console.log(`   ❌ No legs could be parsed from notes`);
+    console.log(`   Notes content: ${bet.notes.substring(0, 200)}...`);
     return false;
   }
   

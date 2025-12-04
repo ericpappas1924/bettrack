@@ -30,6 +30,7 @@ export type Sport = typeof SPORTS[keyof typeof SPORTS];
 export const BET_TYPES = {
   STRAIGHT: 'Straight',
   PLAYER_PROPS: 'Player Prop',
+  PLAYER_PROP_PARLAY: 'Player Prop Parlay',
   PARLAY: 'Parlay',
   TEASER: 'Teaser',
   LIVE: 'Live',

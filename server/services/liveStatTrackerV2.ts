@@ -778,19 +778,39 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   }
   
   // Now try to settle parlays/teasers
-  // Note: Currently limited - requires raw bet text to extract leg dates
-  // For now, we'll skip parlay auto-settlement until we store raw bet text
+  let parlaySettled = 0;
+  let parlayErrors = 0;
+  
   if (parlayBets.length > 0) {
-    console.log(`\n⏭️  [AUTO-SETTLE] Skipping ${parlayBets.length} parlay/teaser bet(s)`);
-    console.log(`   💡 Parlay auto-settlement requires raw bet text (coming soon!)`);
-    console.log(`   📝 For now, parlays/teasers need manual settlement`);
+    console.log(`\n🎰 [AUTO-SETTLE] Processing ${parlayBets.length} parlay/teaser bet(s)`);
+    
+    // Import parlay tracker
+    const { autoSettleParlayBet } = await import('./parlayTracker');
+    
+    for (const parlayBet of parlayBets) {
+      try {
+        const settled = await autoSettleParlayBet(parlayBet);
+        if (settled) {
+          parlaySettled++;
+        }
+      } catch (error) {
+        console.error(`❌ [AUTO-SETTLE] Error settling parlay ${parlayBet.id.substring(0, 8)}:`, {
+          error: error instanceof Error ? error.message : String(error)
+        });
+        parlayErrors++;
+      }
+    }
+    
+    console.log(`\n🎰 [AUTO-SETTLE] Parlay Summary:`);
+    console.log(`   Settled: ${parlaySettled}/${parlayBets.length}`);
+    console.log(`   Errors: ${parlayErrors}`);
   }
   
-  console.log(`\n[AUTO-SETTLE] Summary:`, {
+  console.log(`\n[AUTO-SETTLE] Overall Summary:`, {
     straightBets: settledCount,
-    parlayBets: 0, // Will be implemented when we store raw bet text
-    errors,
-    total: completedBets.length
+    parlayBets: parlaySettled,
+    errors: errors + parlayErrors,
+    total: completedBets.length + parlayBets.length
   });
   console.log(`========================================\n`);
 }

@@ -322,17 +322,27 @@ function extractPlayerPropDetails(block: string): {
 }
 
 function extractParlayDetails(block: string): { legs: string[]; description: string; gameStartTime: Date | null } {
-  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[\d+\]\s*([^\[\n]+)/g;
+  // Pattern captures: [DATE] [SPORT] - [NUMBER] BET_DETAILS
+  // Simpler approach: match each leg separately
+  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n]+?)(?=\s*\[(?:Pending|Won|Lost)\]|$)/g;
   const legs: string[] = [];
   const gameTimes: Date[] = [];
-  let match;
   
-  while ((match = legPattern.exec(block)) !== null) {
-    const gameDate = match[1];
-    const sport = match[2];
-    let betDetail = match[3].trim();
-    betDetail = betDetail.replace(/\s*\[Pending\]/, '').trim();
-    legs.push(betDetail);
+  // Find all matches first
+  const matches = Array.from(block.matchAll(legPattern));
+  
+  for (const match of matches) {
+    const gameDate = match[1]; // e.g., "Dec-07-2025 01:00 PM"
+    const sport = match[2]; // e.g., "NFL"
+    const lineNum = match[3]; // e.g., "121"
+    let betDetail = match[4].trim(); // e.g., "WAS COMMANDERS +2-110"
+    
+    // Clean up extra whitespace
+    betDetail = betDetail.replace(/\s+/g, ' ').trim();
+    
+    // Store full leg with date/sport for tracking later
+    const legWithDate = `[${gameDate}] [${sport}] ${betDetail}`;
+    legs.push(legWithDate);
     
     // Try to parse the game time for this leg
     try {
@@ -418,7 +428,10 @@ export function parseBetPaste(rawText: string): ParseResult {
       const isLive = isLiveBet(block);
       
       let betType = 'Straight';
-      if (block.includes('PLAYER PROPS')) {
+      // Check for player prop parlay first (has both keywords)
+      if (block.includes('PLAYER PROPS') && block.includes('Parlay')) {
+        betType = 'Player Prop Parlay';
+      } else if (block.includes('PLAYER PROPS')) {
         betType = 'Player Prop';
       } else if (block.includes('PARLAY')) {
         betType = 'Parlay';
@@ -459,6 +472,24 @@ export function parseBetPaste(rawText: string): ParseResult {
         if (liveDetails.odds !== null) {
           calculatedOdds = liveDetails.odds;
         }
+      } else if (betType === 'Player Prop Parlay') {
+        // Player prop parlay - extract multiple props from same or different games
+        const propDetails = extractPlayerPropDetails(block);
+        game = propDetails.game;
+        
+        // Extract individual props as legs
+        const propLines = block.split('\n')
+          .filter(l => l.match(/Over|Under/i) && !l.includes(' vs '))
+          .map(l => l.trim());
+        
+        legs = propLines.length > 0 ? propLines : undefined;
+        description = `${legs?.length || 0}-Prop Parlay`;
+        
+        // Re-detect sport
+        sport = game ? getSportFromText(game) : getSportFromText(block);
+        if (sport === 'Other') {
+          sport = getSportFromText(block);
+        }
       } else if (betType === 'Player Prop') {
         const propDetails = extractPlayerPropDetails(block);
         game = propDetails.game;
@@ -474,14 +505,16 @@ export function parseBetPaste(rawText: string): ParseResult {
         if (sport === 'Other') {
           sport = getSportFromText(block);
         }
-      } else if (betType === 'Parlay') {
+      } else if (betType === 'Parlay' || betType === 'Teaser') {
         const parlayDetails = extractParlayDetails(block);
         legs = parlayDetails.legs;
-        description = parlayDetails.description;
-        game = legs.join(' / ');
+        description = betType === 'Teaser' 
+          ? `${legs?.length || 0}-Team Teaser`
+          : parlayDetails.description;
+        game = legs && legs.length > 0 ? legs.join(' / ') : 'Multi-team bet';
         gameStartTime = parlayDetails.gameStartTime;
         if (gameStartTime) {
-          console.log(`  ✓ Extracted game time from parlay: ${gameStartTime}`);
+          console.log(`  ✓ Extracted game time from ${betType.toLowerCase()}: ${gameStartTime}`);
         }
       } else {
         const straightDetails = extractStraightBetDetails(block);

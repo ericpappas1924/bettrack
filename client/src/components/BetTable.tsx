@@ -126,6 +126,8 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           gameStartTime={bet.gameStartTime} 
                           sport={bet.sport as Sport}
                           compact 
+                          betType={bet.betType}
+                          notes={bet.notes}
                         />
                       )}
                       {liveStat && <LiveStatsBadge liveStat={liveStat} compact />}
@@ -319,6 +321,8 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           gameStartTime={bet.gameStartTime} 
                           sport={bet.sport as Sport}
                           compact 
+                          betType={bet.betType}
+                          notes={bet.notes}
                         />
                       )}
                     </div>

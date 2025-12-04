@@ -8,11 +8,58 @@ interface GameStatusBadgeProps {
   gameStartTime: Date | string | null;
   sport: Sport;
   compact?: boolean;
+  betType?: string;
+  notes?: string | null;
 }
 
-export function GameStatusBadge({ gameStartTime, sport, compact = false }: GameStatusBadgeProps) {
+export function GameStatusBadge({ gameStartTime, sport, compact = false, betType, notes }: GameStatusBadgeProps) {
   if (!gameStartTime) {
     return null;
+  }
+
+  // For parlays/teasers, determine status from leg completion
+  if ((betType === 'Parlay' || betType === 'Teaser' || betType === 'Player Prop Parlay') && notes) {
+    const legs = notes.split('\n').filter(line => 
+      line.trim() && 
+      !line.startsWith('Category:') && 
+      !line.startsWith('League:') &&
+      !line.startsWith('Game ID:') &&
+      !line.startsWith('Auto-settled:')
+    );
+
+    if (legs.length > 0) {
+      const totalLegs = legs.length;
+      const completeLegs = legs.filter(leg => leg.includes('[Won]') || leg.includes('[Lost]')).length;
+      const allComplete = completeLegs === totalLegs;
+
+      // If all legs complete, show as FINAL
+      if (allComplete) {
+        return (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="gap-1">
+              <CheckCircle2 className="h-3 w-3" />
+              FINAL
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              All {totalLegs} legs complete
+            </span>
+          </div>
+        );
+      }
+
+      // Otherwise show progress
+      return (
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="gap-1">
+            <Clock className="h-3 w-3" />
+            IN PROGRESS
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            {completeLegs}/{totalLegs} legs complete
+          </span>
+        </div>
+      );
+    }
   }
 
   const status = getGameStatus(gameStartTime, sport);

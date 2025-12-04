@@ -313,6 +313,8 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                   <GameStatusBadge 
                     gameStartTime={bet.gameStartTime} 
                     sport={bet.sport as Sport}
+                    betType={bet.betType}
+                    notes={bet.notes}
                   />
                 </div>
               )}

@@ -703,17 +703,22 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   
   console.log(`[AUTO-SETTLE] Found ${activeBets.length} active bet(s)`);
   
-  // Filter out parlays and teasers - they need manual settlement
-  const straightBets = activeBets.filter((b: any) => {
-    const betType = b.betType?.toLowerCase() || '';
-    const isMultiLeg = betType.includes('parlay') || betType.includes('teaser');
-    if (isMultiLeg) {
-      console.log(`⏭️  [AUTO-SETTLE] Skipping ${b.betType} bet ${b.id.substring(0, 8)} - requires manual settlement`);
-    }
-    return !isMultiLeg;
-  });
+  // Separate straight bets from parlays/teasers
+  const straightBets: any[] = [];
+  const parlayBets: any[] = [];
   
-  console.log(`[AUTO-SETTLE] ${straightBets.length} straight bet(s) eligible for auto-settlement`);
+  for (const bet of activeBets) {
+    const betType = bet.betType?.toLowerCase() || '';
+    const isMultiLeg = betType.includes('parlay') || betType.includes('teaser');
+    
+    if (isMultiLeg) {
+      parlayBets.push(bet);
+    } else {
+      straightBets.push(bet);
+    }
+  }
+  
+  console.log(`[AUTO-SETTLE] ${straightBets.length} straight bet(s), ${parlayBets.length} parlay/teaser(s)`);
   
   const liveStats = await trackMultipleBets(straightBets);
   const completedBets = liveStats.filter(stat => stat.isComplete);
@@ -772,8 +777,18 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
     }
   }
   
+  // Now try to settle parlays/teasers
+  // Note: Currently limited - requires raw bet text to extract leg dates
+  // For now, we'll skip parlay auto-settlement until we store raw bet text
+  if (parlayBets.length > 0) {
+    console.log(`\n⏭️  [AUTO-SETTLE] Skipping ${parlayBets.length} parlay/teaser bet(s)`);
+    console.log(`   💡 Parlay auto-settlement requires raw bet text (coming soon!)`);
+    console.log(`   📝 For now, parlays/teasers need manual settlement`);
+  }
+  
   console.log(`\n[AUTO-SETTLE] Summary:`, {
-    settled: settledCount,
+    straightBets: settledCount,
+    parlayBets: 0, // Will be implemented when we store raw bet text
     errors,
     total: completedBets.length
   });

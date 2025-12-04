@@ -452,6 +452,111 @@ export async function findGameByTeams(
 }
 
 /**
+ * Find game by team name and date
+ * Used for parlay/teaser leg tracking where we only have one team + date
+ */
+export async function findGameByTeamAndDate(
+  sport: string,
+  teamName: string,
+  gameDate: Date
+): Promise<ScoreRoomGame | null> {
+  const leagueAbbr = SPORT_MAP[sport];
+  if (!leagueAbbr) {
+    console.warn(`⚠️  Unknown sport: ${sport}`);
+    return null;
+  }
+
+  console.log(`🔍 Finding game for ${teamName} on ${gameDate.toLocaleDateString()}`);
+
+  // Normalize team name
+  const normalizeTeam = (name: string) => 
+    name.toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .replace(/STLOUISCARDINALS/, 'CARDINALS')
+      .replace(/SANFRANCISCO/, 'SF')
+      .replace(/LOSANGELES/, 'LA')
+      .replace(/NEWYORK/, 'NY')
+      .replace(/NEWENGLAND/, 'NE')
+      .replace(/NEWORLEANS/, 'NO')
+      .replace(/GREENBAY/, 'GB')
+      .replace(/TAMPABAY/, 'TB')
+      .replace(/KANSASCITY/, 'KC');
+  
+  const teamNorm = normalizeTeam(teamName);
+
+  try {
+    // Try schedule API for the specific date
+    const schedules = await fetchLeagueSchedules();
+    
+    const sportCategory = 
+      ['nba', 'wnba', 'mens-college-basketball', 'womens-college-basketball', 'nbl'].includes(leagueAbbr) ? 'basketball' :
+      ['nfl', 'college-football'].includes(leagueAbbr) ? 'football' :
+      leagueAbbr === 'mlb' ? 'baseball' :
+      leagueAbbr === 'nhl' ? 'hockey' :
+      leagueAbbr === 'mls' ? 'soccer' : null;
+    
+    if (sportCategory && schedules[sportCategory]?.[leagueAbbr]?.schedule?.games) {
+      const games = schedules[sportCategory][leagueAbbr].schedule.games;
+      
+      // Filter games for the target date (within same day)
+      const targetDate = new Date(gameDate);
+      const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+      
+      for (const game of games) {
+        const gameTime = new Date(game.date);
+        
+        // Check if game is on the same day
+        if (gameTime < startOfDay || gameTime > endOfDay) continue;
+        
+        const competition = game.competitions?.[0];
+        if (!competition) continue;
+        
+        const competitors = competition.competitors || [];
+        const awayCompetitor = competitors.find((c: any) => c.homeAway === 'away');
+        const homeCompetitor = competitors.find((c: any) => c.homeAway === 'home');
+        
+        if (!awayCompetitor || !homeCompetitor) continue;
+        
+        const homeTeam = homeCompetitor.team?.displayName || homeCompetitor.team?.name || '';
+        const awayTeam = awayCompetitor.team?.displayName || awayCompetitor.team?.name || '';
+        
+        const homeNorm = normalizeTeam(homeTeam);
+        const awayNorm = normalizeTeam(awayTeam);
+        
+        // Check if team matches
+        if (homeNorm.includes(teamNorm) || teamNorm.includes(homeNorm) ||
+            awayNorm.includes(teamNorm) || teamNorm.includes(awayNorm)) {
+          
+          console.log(`✅ Found game: ${awayTeam} @ ${homeTeam}`);
+          
+          return {
+            gameId: game.id,
+            time: game.date,
+            homeTeam,
+            awayTeam,
+            homeTeamLogo: homeCompetitor.team?.logo,
+            awayTeamLogo: awayCompetitor.team?.logo,
+            league_abbrv: leagueAbbr,
+            homeScore: homeCompetitor.score ? parseInt(homeCompetitor.score) : undefined,
+            awayScore: awayCompetitor.score ? parseInt(awayCompetitor.score) : undefined,
+            isCompleted: competition.status?.type?.completed || false,
+            homeLeaders: homeCompetitor.leaders || undefined,
+            awayLeaders: awayCompetitor.leaders || undefined,
+          };
+        }
+      }
+    }
+    
+    console.warn(`⚠️  No game found for ${teamName} on ${gameDate.toLocaleDateString()}`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error finding game by team and date:`, error);
+    return null;
+  }
+}
+
+/**
  * Extract final scores from box score
  * Returns [awayScore, homeScore]
  */

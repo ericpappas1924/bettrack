@@ -22,3 +22,4 @@ CREATE INDEX IF NOT EXISTS idx_bets_market ON bets(market) WHERE market IS NOT N
 
 
 
+

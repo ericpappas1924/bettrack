@@ -140,6 +140,8 @@ export async function registerRoutes(
     try {
       const userId = req.user.claims.sub;
       let betsWithUser = req.body.map((bet: any) => ({ ...bet, userId }));
+      let enrichedMatchups = 0;
+      let enrichedGameTimes = 0;
       
       console.log(`\n========== IMPORT STARTED ==========`);
       console.log(`Total bets to import: ${betsWithUser.length}`);
@@ -178,6 +180,7 @@ export async function registerRoutes(
                 game: fullMatchup
               };
               console.log(`   ✅ Enriched: "${bet.game}" → "${fullMatchup}"`);
+              enrichedMatchups++;
             } else {
               console.log(`   ⚠️  Could not find opponent for "${bet.game}"`);
             }
@@ -186,10 +189,7 @@ export async function registerRoutes(
             await new Promise(resolve => setTimeout(resolve, 500));
           }
           
-          const enrichedCount = betsWithUser.filter((bet: any) => 
-            bet.game && bet.game.includes(' vs ')
-          ).length;
-          console.log(`\n✅ Matchup enrichment complete: ${enrichedCount} bets now have full matchups`);
+          console.log(`\n✅ Matchup enrichment complete: ${enrichedMatchups} bets enriched`);
         }
       } catch (matchupError) {
         console.error("\n❌ ERROR enriching matchups:", matchupError);
@@ -229,10 +229,10 @@ export async function registerRoutes(
             return bet;
           });
           
-          const enrichedCount = betsWithUser.filter((bet: any) => bet.gameStartTime).length;
+          enrichedGameTimes = enrichedGameTimes + betsNeedingTimes.length - betsNeedingTimes.filter((b: any) => !times.has(b.matchup + '|' + b.sport)).length;
           console.log(`\n📊 ENRICHMENT SUMMARY:`);
-          console.log(`   Enriched: ${enrichedCount} bets with game times`);
-          console.log(`   Missing: ${betsWithUser.length - enrichedCount} bets without times`);
+          console.log(`   Enriched: ${enrichedGameTimes} bets with game times`);
+          console.log(`   Missing: ${betsWithUser.length - enrichedGameTimes} bets without times`);
         } else {
           console.log(`\n⚠️  No bets needed game time enrichment (all already have times or missing game/sport)`);
         }
@@ -292,13 +292,17 @@ export async function registerRoutes(
       }
       console.log(`========== IMPORT COMPLETE ==========\n`);
       
-      // Return both successes and failures
+      // Return successes, failures, and enrichment stats
       res.status(201).json({
         imported: createdBets,
         failed: failedBets.length > 0 ? failedBets.map(f => ({ 
           game: f.bet.game || f.bet.team, 
           error: f.error 
-        })) : undefined
+        })) : undefined,
+        enrichment: {
+          matchups: enrichedMatchups,
+          gameTimes: enrichedGameTimes
+        }
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

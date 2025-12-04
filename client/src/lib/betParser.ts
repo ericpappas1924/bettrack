@@ -429,8 +429,12 @@ export function parseBetPaste(rawText: string): ParseResult {
         if (gameStartTime) {
           console.log(`  ✓ Extracted game time from straight bet: ${gameStartTime}`);
         }
-        if (straightDetails.incompleteMatchup) {
-          warnings.push('Incomplete game matchup - CLV auto-fetch may not work. You can manually update the game field to include both teams (e.g., "TEAM A vs TEAM B")');
+        if (straightDetails.incompleteMatchup && !gameStartTime) {
+          // Only warn if we also don't have game time (can't auto-fix)
+          warnings.push('Incomplete game matchup - add game time or full matchup for CLV auto-fetch');
+        } else if (straightDetails.incompleteMatchup && gameStartTime) {
+          // Don't warn - backend will auto-fix this using game time + Odds API
+          console.log(`  ℹ️  Incomplete matchup will be enriched during import using game time`);
         }
       }
       

@@ -149,12 +149,23 @@ export default function Dashboard() {
       // Handle new response format with both imported and failed bets
       const imported = data.imported || data;
       const failed = data.failed || [];
+      const enrichment = data.enrichment || { matchups: 0, gameTimes: 0 };
+      
+      let description = `Imported ${imported.length} bet${imported.length !== 1 ? 's' : ''}`;
+      
+      // Add enrichment info
+      if (enrichment.matchups > 0 || enrichment.gameTimes > 0) {
+        const enrichedItems = [];
+        if (enrichment.matchups > 0) enrichedItems.push(`${enrichment.matchups} opponent${enrichment.matchups !== 1 ? 's' : ''} found`);
+        if (enrichment.gameTimes > 0) enrichedItems.push(`${enrichment.gameTimes} time${enrichment.gameTimes !== 1 ? 's' : ''} added`);
+        description += `. Auto-enriched: ${enrichedItems.join(', ')}`;
+      }
       
       if (failed.length > 0) {
         // Partial success
         toast({
           title: "Partial import success",
-          description: `Imported ${imported.length} bets. ${failed.length} failed validation.`,
+          description: `${description}. ${failed.length} failed validation.`,
           variant: "default",
         });
         console.warn('Failed bets:', failed);
@@ -162,7 +173,7 @@ export default function Dashboard() {
         // Full success
         toast({
           title: "Bets imported",
-          description: `Successfully imported ${imported.length} bets`,
+          description,
         });
       }
     },

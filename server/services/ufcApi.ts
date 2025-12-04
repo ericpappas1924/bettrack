@@ -254,8 +254,9 @@ export async function findUFCFight(
         return { fight: event, isCompleted, winner, method, source: 'espn' };
       }
     } else {
-      // TheSportsDB format
-      const eventName = event.strEvent || '';
+      // TheSportsDB format (event is 'any' type)
+      const dbEvent = event as any;
+      const eventName = dbEvent.strEvent || '';
       const eventNameNorm = normalizeName(eventName);
       
       // TheSportsDB format: "Fighter1 vs Fighter2" in strEvent
@@ -267,21 +268,21 @@ export async function findUFCFight(
         console.log(`   ✅ [TheSportsDB] Found fight: ${eventName}`);
         
         // Check if completed (has a result)
-        const isCompleted = event.strStatus === 'Match Finished' || event.intHomeScore !== null;
+        const isCompleted = dbEvent.strStatus === 'Match Finished' || dbEvent.intHomeScore !== null;
         let winner: string | null = null;
         let method: string | null = null;
         
         if (isCompleted) {
           // TheSportsDB stores result in strResult or intHomeScore/intAwayScore
           // intHomeScore = 1 means home fighter won, 0 means lost
-          if (event.intHomeScore === '1') {
-            winner = event.strHomeTeam; // Home fighter won
-          } else if (event.intAwayScore === '1') {
-            winner = event.strAwayTeam; // Away fighter won
+          if (dbEvent.intHomeScore === '1') {
+            winner = dbEvent.strHomeTeam; // Home fighter won
+          } else if (dbEvent.intAwayScore === '1') {
+            winner = dbEvent.strAwayTeam; // Away fighter won
           }
           
           // Method is in strResult
-          method = event.strResult || null;
+          method = dbEvent.strResult || null;
           
           if (winner) {
             console.log(`   🏆 Winner: ${winner}`);
@@ -397,30 +398,31 @@ export async function findFighterRecentFight(
         };
       }
     } else {
-      // TheSportsDB format
-      const eventName = event.strEvent || '';
+      // TheSportsDB format (event is 'any' type)
+      const dbEvent = event as any;
+      const eventName = dbEvent.strEvent || '';
       const eventNameNorm = normalizeName(eventName);
       
       if (eventNameNorm.includes(fighterNorm)) {
-        const isCompleted = event.strStatus === 'Match Finished' || event.intHomeScore !== null;
+        const isCompleted = dbEvent.strStatus === 'Match Finished' || dbEvent.intHomeScore !== null;
         
         // Determine which fighter is ours and who is opponent
-        const homeNorm = normalizeName(event.strHomeTeam || '');
-        const awayNorm = normalizeName(event.strAwayTeam || '');
+        const homeNorm = normalizeName(dbEvent.strHomeTeam || '');
+        const awayNorm = normalizeName(dbEvent.strAwayTeam || '');
         
         let opponent = '';
         if (homeNorm.includes(fighterNorm) || fighterNorm.includes(homeNorm)) {
-          opponent = event.strAwayTeam;
+          opponent = dbEvent.strAwayTeam;
         } else {
-          opponent = event.strHomeTeam;
+          opponent = dbEvent.strHomeTeam;
         }
         
         let winner = null;
         if (isCompleted) {
-          if (event.intHomeScore === '1') {
-            winner = event.strHomeTeam;
-          } else if (event.intAwayScore === '1') {
-            winner = event.strAwayTeam;
+          if (dbEvent.intHomeScore === '1') {
+            winner = dbEvent.strHomeTeam;
+          } else if (dbEvent.intAwayScore === '1') {
+            winner = dbEvent.strAwayTeam;
           }
         }
         
@@ -429,7 +431,7 @@ export async function findFighterRecentFight(
           opponent,
           isCompleted,
           winner,
-          method: event.strResult || null
+          method: dbEvent.strResult || null
         };
       }
     }

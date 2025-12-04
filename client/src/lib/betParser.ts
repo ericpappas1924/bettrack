@@ -536,12 +536,31 @@ export function parseBetPaste(rawText: string): ParseResult {
       
       const statusText = block.toLowerCase();
       let status: ParsedBet['status'] = 'pending';
-      if (statusText.includes('won') || statusText.includes('win')) {
-        status = 'won';
-      } else if (statusText.includes('lost') || statusText.includes('loss')) {
-        status = 'lost';
-      } else if (statusText.includes('pending')) {
-        status = 'pending';
+      
+      // For parlays/teasers, don't detect status from individual leg tags
+      // Only detect overall bet status from the line after all legs
+      if (betType === 'Parlay' || betType === 'Teaser') {
+        // Check if the bet itself (not legs) is marked won/lost
+        // Look for won/lost OUTSIDE of leg brackets
+        const betStatusMatch = statusText.match(/\]\s*(won|lost|pending)/);
+        if (betStatusMatch) {
+          const detectedStatus = betStatusMatch[1];
+          if (detectedStatus === 'won') status = 'won';
+          else if (detectedStatus === 'lost') status = 'lost';
+          else status = 'pending';
+        } else {
+          // No overall status found, default to pending
+          status = 'pending';
+        }
+      } else {
+        // For non-parlay bets, use simple detection
+        if (statusText.includes('won') || statusText.includes('win')) {
+          status = 'won';
+        } else if (statusText.includes('lost') || statusText.includes('loss')) {
+          status = 'lost';
+        } else if (statusText.includes('pending')) {
+          status = 'pending';
+        }
       }
       
       // Detect parsing issues

@@ -179,7 +179,33 @@ export function getSportFromText(text: string): Sport {
     'STOLEN BASE', 'TOTAL BASE', 'INNING', 'PITCH'
   ];
   
-  // Check NFL teams first (most specific)
+  // Hockey keywords
+  const hockeyKeywords = [
+    'GOAL', 'SAVE', 'SAVES', 'SHOT ON GOAL', 'SHOTS ON GOAL',
+    'POWER PLAY', 'PENALTY', 'GOALIE', 'GOALTENDER', 'SHUTOUT'
+  ];
+  
+  // Check for hockey first (has unique keywords)
+  if (hockeyKeywords.some(keyword => upper.includes(keyword))) {
+    return SPORTS.NHL;
+  }
+  
+  // Check NHL teams with FULL NAMES FIRST (before NFL to avoid "Panthers" conflict)
+  const nhlFullNames = [
+    'BOSTON BRUINS', 'BUFFALO SABRES', 'DETROIT RED WINGS', 'FLORIDA PANTHERS',
+    'MONTREAL CANADIENS', 'OTTAWA SENATORS', 'TAMPA BAY LIGHTNING', 'TORONTO MAPLE LEAFS',
+    'CAROLINA HURRICANES', 'COLUMBUS BLUE JACKETS', 'NEW JERSEY DEVILS', 
+    'NEW YORK ISLANDERS', 'NEW YORK RANGERS', 'PHILADELPHIA FLYERS', 
+    'PITTSBURGH PENGUINS', 'WASHINGTON CAPITALS',
+    'CHICAGO BLACKHAWKS', 'COLORADO AVALANCHE', 'DALLAS STARS', 'MINNESOTA WILD',
+    'NASHVILLE PREDATORS', 'ST. LOUIS BLUES', 'WINNIPEG JETS', 'UTAH HOCKEY CLUB',
+    'ANAHEIM DUCKS', 'CALGARY FLAMES', 'EDMONTON OILERS', 'LOS ANGELES KINGS',
+    'SAN JOSE SHARKS', 'SEATTLE KRAKEN', 'VANCOUVER CANUCKS', 'VEGAS GOLDEN KNIGHTS'
+  ];
+  
+  if (nhlFullNames.some(team => upper.includes(team))) return SPORTS.NHL;
+  
+  // Check NFL teams (most specific)
   const nflTeams = [
     'BILLS', 'DOLPHINS', 'PATRIOTS', 'JETS', // AFC East
     'RAVENS', 'BENGALS', 'BROWNS', 'STEELERS', // AFC North

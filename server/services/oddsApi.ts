@@ -205,11 +205,20 @@ export async function findPlayerPropOdds(
   const marketMap: Record<string, string> = {
     // NFL/NCAAF
     'passing yards': 'player_pass_yds',
+    'passing touchdowns': 'player_pass_tds',
+    'passing tds': 'player_pass_tds',
     'pass completions': 'player_pass_completions',
+    'pass attempts': 'player_pass_attempts',
+    'pass interceptions': 'player_pass_interceptions',
+    'interceptions': 'player_pass_interceptions',
     'rushing yards': 'player_rush_yds',
+    'rushing attempts': 'player_rush_attempts',
+    'carries': 'player_rush_attempts',
     'receiving yards': 'player_reception_yds',
     'receptions': 'player_receptions',
-    'carries': 'player_rush_yds',
+    'sacks': 'player_sacks',
+    'tackles': 'player_tackles_assists',
+    'tackles + assists': 'player_tackles_assists',
     
     // NBA/NCAAB
     'points': 'player_points',
@@ -244,7 +253,7 @@ export async function findPlayerPropOdds(
     if (sport === 'NBA' || sport === 'NCAAB') {
       console.log(`   Basketball: points, rebounds, total rebounds, assists, total assists, threes, steals, blocks, turnovers, pra, pts + reb + ast`);
     } else if (sport === 'NFL' || sport === 'NCAAF') {
-      console.log(`   Football: passing yards, pass completions, rushing yards, receiving yards, receptions, carries`);
+      console.log(`   Football: passing yards, passing tds, pass completions, pass attempts, pass interceptions, rushing yards, rushing attempts, receiving yards, receptions, sacks, tackles`);
     } else if (sport === 'MLB') {
       console.log(`   Baseball: strikeouts, hits, home runs, rbis, total bases`);
     } else {

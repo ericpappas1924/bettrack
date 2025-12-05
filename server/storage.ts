@@ -1,8 +1,21 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq } from "drizzle-orm";
+import { eq, and, ne, desc } from "drizzle-orm";
 import { bets, users, type Bet, type InsertBet, type UpdateBet, type User, type UpsertUser } from "@shared/schema";
 import ws from "ws";
+
+export type BetWithUser = Bet & { user: User };
+
+export type LeaderboardEntry = {
+  user: User;
+  totalBets: number;
+  settledBets: number;
+  wonBets: number;
+  totalStake: number;
+  totalProfit: number;
+  roi: number;
+  avgClv: number | null;
+};
 
 neonConfig.webSocketConstructor = ws;
 
@@ -22,6 +35,12 @@ export interface IStorage {
   createBets(bets: InsertBet[]): Promise<Bet[]>;
   updateBet(id: string, bet: UpdateBet): Promise<Bet | undefined>;
   deleteBet(id: string): Promise<boolean>;
+  
+  // Social features
+  getSocialFeed(limit?: number, excludeUserId?: string): Promise<BetWithUser[]>;
+  getLeaderboard(): Promise<LeaderboardEntry[]>;
+  getUserPublicBets(userId: string): Promise<BetWithUser[]>;
+  getUserActiveBets(userId: string): Promise<BetWithUser[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -79,6 +98,96 @@ export class DatabaseStorage implements IStorage {
   async deleteBet(id: string): Promise<boolean> {
     const result = await db.delete(bets).where(eq(bets.id, id)).returning();
     return result.length > 0;
+  }
+  
+  // Social features
+  async getSocialFeed(limit: number = 50, excludeUserId?: string): Promise<BetWithUser[]> {
+    const whereClause = excludeUserId 
+      ? and(eq(bets.status, 'active'), ne(bets.userId, excludeUserId))
+      : eq(bets.status, 'active');
+    
+    const allBets = await db
+      .select()
+      .from(bets)
+      .innerJoin(users, eq(bets.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(bets.createdAt))
+      .limit(limit);
+    
+    return allBets.map(row => ({
+      ...row.bets,
+      user: row.users
+    }));
+  }
+
+  async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    const allUsers = await db.select().from(users);
+    const allBets = await db.select().from(bets);
+    
+    const leaderboard: LeaderboardEntry[] = [];
+    
+    for (const user of allUsers) {
+      const userBets = allBets.filter(b => b.userId === user.id);
+      if (userBets.length === 0) continue;
+      
+      const settledBets = userBets.filter(b => b.status === 'settled');
+      
+      // Require at least 1 settled bet to appear on leaderboard
+      if (settledBets.length === 0) continue;
+      
+      const wonBets = settledBets.filter(b => b.result === 'won');
+      
+      const totalStake = settledBets.reduce((sum, b) => sum + parseFloat(b.stake || '0'), 0);
+      const totalProfit = settledBets.reduce((sum, b) => sum + parseFloat(b.profit || '0'), 0);
+      
+      const betsWithClv = userBets.filter(b => b.clv && !isNaN(parseFloat(b.clv)));
+      const avgClv = betsWithClv.length > 0 
+        ? betsWithClv.reduce((sum, b) => sum + parseFloat(b.clv!), 0) / betsWithClv.length
+        : null;
+      
+      const roi = totalStake > 0 ? (totalProfit / totalStake) * 100 : 0;
+      
+      leaderboard.push({
+        user,
+        totalBets: userBets.length,
+        settledBets: settledBets.length,
+        wonBets: wonBets.length,
+        totalStake,
+        totalProfit,
+        roi,
+        avgClv
+      });
+    }
+    
+    return leaderboard.sort((a, b) => b.roi - a.roi);
+  }
+
+  async getUserPublicBets(userId: string): Promise<BetWithUser[]> {
+    const userBets = await db
+      .select()
+      .from(bets)
+      .innerJoin(users, eq(bets.userId, users.id))
+      .where(eq(bets.userId, userId))
+      .orderBy(desc(bets.createdAt));
+    
+    return userBets.map(row => ({
+      ...row.bets,
+      user: row.users
+    }));
+  }
+  
+  async getUserActiveBets(userId: string): Promise<BetWithUser[]> {
+    const userBets = await db
+      .select()
+      .from(bets)
+      .innerJoin(users, eq(bets.userId, users.id))
+      .where(and(eq(bets.userId, userId), eq(bets.status, 'active')))
+      .orderBy(desc(bets.createdAt));
+    
+    return userBets.map(row => ({
+      ...row.bets,
+      user: row.users
+    }));
   }
 }
 

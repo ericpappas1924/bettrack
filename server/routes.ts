@@ -857,10 +857,91 @@ export async function registerRoutes(
         ballDontLieIntegration: true,
         autoSettlement: true,
         timeRemaining: true,
-        cbbSupport: true
+        cbbSupport: true,
+        socialDashboard: true
       },
       timestamp: new Date().toISOString()
     });
+  });
+
+  // ================== SOCIAL FEATURES ==================
+
+  // Get social feed - all users' active bets (excludes own bets)
+  app.get("/api/social/feed", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const feed = await storage.getSocialFeed(limit, userId);
+      res.json(feed);
+    } catch (error) {
+      console.error("Error fetching social feed:", error);
+      res.status(500).json({ error: "Failed to fetch social feed" });
+    }
+  });
+
+  // Get leaderboard ranked by ROI with CLV info
+  app.get("/api/social/leaderboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const leaderboard = await storage.getLeaderboard();
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  // Get a specific user's public bets
+  app.get("/api/social/users/:userId/bets", isAuthenticated, async (req: any, res) => {
+    try {
+      const bets = await storage.getUserPublicBets(req.params.userId);
+      res.json(bets);
+    } catch (error) {
+      console.error("Error fetching user bets:", error);
+      res.status(500).json({ error: "Failed to fetch user bets" });
+    }
+  });
+
+  // Tail a bet - copy it to logged in user's tracker
+  app.post("/api/bets/:id/tail", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const originalBet = await storage.getBet(req.params.id);
+      
+      if (!originalBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      
+      // Prevent tailing own bet
+      if (originalBet.userId === userId) {
+        return res.status(400).json({ error: "Cannot tail your own bet" });
+      }
+      
+      // Get stake from request or use original
+      const stake = req.body.stake || originalBet.stake;
+      
+      // Create new bet copying the original
+      const newBet = await storage.createBet({
+        userId,
+        sport: originalBet.sport,
+        betType: originalBet.betType,
+        game: originalBet.game,
+        team: originalBet.team,
+        player: originalBet.player,
+        market: originalBet.market,
+        line: originalBet.line,
+        overUnder: originalBet.overUnder as "Over" | "Under" | null | undefined,
+        openingOdds: originalBet.openingOdds,
+        stake,
+        potentialWin: originalBet.potentialWin,
+        notes: `Tailed from another user`,
+        gameStartTime: originalBet.gameStartTime,
+      });
+      
+      res.json(newBet);
+    } catch (error) {
+      console.error("Error tailing bet:", error);
+      res.status(500).json({ error: "Failed to tail bet" });
+    }
   });
 
   return httpServer;

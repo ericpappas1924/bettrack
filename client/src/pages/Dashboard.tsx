@@ -28,7 +28,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User, X, CalendarDays } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User, X, CalendarDays, Users } from "lucide-react";
+import { Link } from "wouter";
 import { format, isSameDay, startOfDay, isToday } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -445,6 +446,12 @@ export default function Dashboard() {
             <h1 className="text-lg sm:text-xl font-bold">BetTrack</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/social">
+              <Button variant="outline" size="sm" data-testid="button-social">
+                <Users className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Social</span>
+              </Button>
+            </Link>
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

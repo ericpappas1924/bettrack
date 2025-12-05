@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import Dashboard from "@/pages/Dashboard";
+import SocialDashboard from "@/pages/SocialDashboard";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
@@ -28,6 +29,7 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Dashboard} />
+          <Route path="/social" component={SocialDashboard} />
         </>
       )}
       <Route component={NotFound} />

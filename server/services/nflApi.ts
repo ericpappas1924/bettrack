@@ -99,7 +99,12 @@ async function makeNFLApiRequest(endpoint: string, params: Record<string, any> =
     console.log(`✅ [NFL-API] Success:`, { endpoint, dataLength: data?.body?.length || data?.statusCode });
     return data;
   } catch (error: any) {
-    console.error(`❌ [NFL-API] Request failed:`, { endpoint, error: error.message });
+    console.error(`❌ [NFL-API] Request failed:`, { 
+      endpoint, 
+      error: error.message,
+      stack: error.stack,
+      cause: error.cause 
+    });
     throw error;
   }
 }
@@ -107,17 +112,71 @@ async function makeNFLApiRequest(endpoint: string, params: Record<string, any> =
 /**
  * Find an NFL game by team names and date
  */
-export async function findNFLGameByTeams(team1: string, team2: string, gameDate?: Date): Promise<any> {
+export async function findNFLGameByTeams(team1: string, team2: string, gameDate?: Date): Promise<{ gameID: string; home: string; away: string } | null> {
   console.log(`🔍 [NFL-API] findNFLGameByTeams:`, { team1, team2, gameDate });
   
-  // For now, we'll need to search by fetching recent games
-  // The API doesn't have a direct "find game by teams" endpoint
-  // We'll need to get the schedule and filter
+  // Use gameDate or default to today
+  const searchDate = gameDate || new Date();
+  const dateStr = searchDate.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
   
-  // TODO: Implement game search logic when we have a schedule endpoint
-  // For now, return null and we'll need to pass gameID directly
-  console.log(`⚠️  [NFL-API] Game search not yet implemented - gameID must be provided`);
-  return null;
+  console.log(`📅 [NFL-API] Searching games for date: ${dateStr}`);
+  
+  try {
+    // Fetch games for the date
+    const response = await makeNFLApiRequest('/getNFLGamesForDate', {
+      gameDate: dateStr,
+      topPerformers: 'false',
+      fantasyPoints: 'false'
+    });
+    
+    if (!response || !response.body) {
+      console.log(`❌ [NFL-API] No games found for date ${dateStr}`);
+      return null;
+    }
+    
+    const games = Array.isArray(response.body) ? response.body : Object.values(response.body);
+    console.log(`✅ [NFL-API] Found ${games.length} game(s) for ${dateStr}`);
+    
+    // Normalize team names for comparison
+    const normalizeTeam = (team: string) => team.toUpperCase().replace(/[^A-Z]/g, '');
+    const team1Norm = normalizeTeam(team1);
+    const team2Norm = normalizeTeam(team2);
+    
+    // Search for matching game
+    for (const game of games) {
+      const homeNorm = normalizeTeam(game.home || game.teamIDHome || '');
+      const awayNorm = normalizeTeam(game.away || game.teamIDAway || '');
+      
+      const match = (
+        (homeNorm.includes(team1Norm) || team1Norm.includes(homeNorm)) &&
+        (awayNorm.includes(team2Norm) || team2Norm.includes(awayNorm))
+      ) || (
+        (homeNorm.includes(team2Norm) || team2Norm.includes(homeNorm)) &&
+        (awayNorm.includes(team1Norm) || team1Norm.includes(awayNorm))
+      );
+      
+      if (match) {
+        const gameID = game.gameID;
+        console.log(`✅ [NFL-API] Game found:`, {
+          gameID,
+          matchup: `${game.away} @ ${game.home}`,
+          gameTime: game.gameTime || game.gameDate
+        });
+        
+        return {
+          gameID,
+          home: game.home || game.teamIDHome,
+          away: game.away || game.teamIDAway
+        };
+      }
+    }
+    
+    console.log(`❌ [NFL-API] No matching game found for teams: ${team1} vs ${team2}`);
+    return null;
+  } catch (error: any) {
+    console.error(`❌ [NFL-API] Error finding game:`, error.message);
+    return null;
+  }
 }
 
 /**

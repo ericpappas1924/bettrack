@@ -625,16 +625,28 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
   // ========== NFL: Use NFL API ==========
   if (bet.sport === 'NFL') {
     console.log(`🏈 [TRACKER] Routing to NFL API for NFL bet ${betId}`);
-    // NFL API requires gameID - check if we have it in bet.notes
+    
+    // Try to get gameID from notes first (manual override)
     const gameIdMatch = bet.notes?.match(/Game ID: (\d+_[A-Z]+@[A-Z]+)/);
-    if (!gameIdMatch) {
-      console.log(`❌ [NFL-TRACKER] No gameID found in bet notes. NFL API requires gameID.`);
-      console.log(`   Add gameID to bet notes like: "Game ID: 20241020_CAR@WSH"`);
+    if (gameIdMatch) {
+      const gameId = gameIdMatch[1];
+      console.log(`📋 [NFL-TRACKER] Using gameID from notes: ${gameId}`);
+      return trackNFLBet(bet, betDetails, gameId);
+    }
+    
+    // No manual gameID, try to find it automatically
+    console.log(`🔍 [NFL-TRACKER] No gameID in notes, searching for game...`);
+    const gameInfo = await nflApi.findNFLGameByTeams(team1, team2, new Date(bet.gameStartTime));
+    
+    if (!gameInfo) {
+      console.log(`❌ [NFL-TRACKER] Could not find gameID for ${team1} vs ${team2}`);
+      console.log(`   Either add manually to notes: "Game ID: YYYYMMDD_AWAY@HOME"`);
+      console.log(`   Or check if game is scheduled in NFL API`);
       return null;
     }
-    const gameId = gameIdMatch[1];
-    console.log(`📋 [NFL-TRACKER] Using gameID: ${gameId}`);
-    return trackNFLBet(bet, betDetails, gameId);
+    
+    console.log(`✅ [NFL-TRACKER] Found gameID automatically: ${gameInfo.gameID}`);
+    return trackNFLBet(bet, betDetails, gameInfo.gameID);
   }
   
   // ========== Other Sports: Use Score Room API ==========

@@ -1095,9 +1095,16 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   const straightBets: any[] = [];
   const parlayBets: any[] = [];
   
+  // Count by sport for logging
+  const sportCounts: Record<string, number> = {};
+  
   for (const bet of activeBets) {
     const betType = bet.betType?.toLowerCase() || '';
     const isMultiLeg = betType.includes('parlay') || betType.includes('teaser');
+    
+    // Count by sport
+    const sport = bet.sport || 'Unknown';
+    sportCounts[sport] = (sportCounts[sport] || 0) + 1;
     
     if (isMultiLeg) {
       parlayBets.push(bet);
@@ -1107,6 +1114,7 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   }
   
   console.log(`[AUTO-SETTLE] ${straightBets.length} straight bet(s), ${parlayBets.length} parlay/teaser(s)`);
+  console.log(`[AUTO-SETTLE] By sport:`, sportCounts);
   
   const liveStats = await trackMultipleBets(straightBets);
   const completedBets = liveStats.filter(stat => stat.isComplete);
@@ -1121,7 +1129,7 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
       const betId = stat.betId.substring(0, 8);
       
       // CRITICAL: For player props, only settle if we have actual stat data
-      if (stat.betType === 'Player Prop' && stat.currentValue === null) {
+      if (stat.betType === 'Player Prop' && (stat.currentValue === null || stat.currentValue === undefined)) {
         console.log(`⏭️  [AUTO-SETTLE] Skipping bet ${betId}: Player prop with no stat data (player may not have entered game)`);
         continue;
       }
@@ -1146,11 +1154,17 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
           profit = (-stake).toFixed(2);
         }
         
-        console.log(`[AUTO-SETTLE] Settling bet ${betId}:`, {
+        console.log(`[AUTO-SETTLE] Settling bet ${betId} (${bet.sport || 'Unknown'}):`, {
+          sport: bet.sport,
+          betType: bet.betType,
           game: bet.game,
+          playerName: stat.playerName,
+          currentValue: stat.currentValue,
+          targetValue: stat.targetValue,
           result,
           stake,
-          profit
+          profit,
+          gameStatus: stat.gameStatus
         });
         
         await storage.updateBet(stat.betId, {

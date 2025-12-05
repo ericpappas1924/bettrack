@@ -246,14 +246,26 @@ function extractPlayerPropDetails(block: string): {
   overUnder?: 'Over' | 'Under';
   line?: string;
 } {
-  // Find the line with "vs" that doesn't contain parentheses (the game line)
+  // Find the line with "vs" that represents the game matchup
+  // Allow parentheses for team location clarifications like "Miami (Oh)"
   const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   let game = '';
   
   for (const line of lines) {
-    if (line.includes(' vs ') && !line.includes('(') && !line.includes('[')) {
-      game = line;
-      break;
+    // Match lines with "vs" that look like game matchups
+    // Exclude lines with player names in parens at the end (e.g., "Player (TEAM) Over")
+    if (line.includes(' vs ') && !line.includes('[')) {
+      // Check if this looks like a matchup line vs a prop line
+      // Matchup: "Miami (Oh) vs Western Michigan"
+      // Prop: "Tailique Williams (WMC) Over 28.5 Receiving Yards"
+      const hasOverUnder = line.match(/\b(Over|Under)\b/i);
+      const hasStatType = line.match(/\b(Yards|Points|Assists|Rebounds|Receptions|Touchdowns)\b/i);
+      
+      // If it has Over/Under or stat types, it's likely a prop line, not the game
+      if (!hasOverUnder && !hasStatType) {
+        game = line;
+        break;
+      }
     }
   }
   

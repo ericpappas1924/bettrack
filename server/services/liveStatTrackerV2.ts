@@ -956,8 +956,15 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   
   for (const stat of liveStats) {
     if (stat.isComplete) {
-      const result = stat.isWinning ? 'won' : 'lost';
       const betId = stat.betId.substring(0, 8);
+      
+      // CRITICAL: For player props, only settle if we have actual stat data
+      if (stat.betType === 'Player Prop' && stat.currentValue === null) {
+        console.log(`⏭️  [AUTO-SETTLE] Skipping bet ${betId}: Player prop with no stat data (player may not have entered game)`);
+        continue;
+      }
+      
+      const result = stat.isWinning ? 'won' : 'lost';
       
       try {
         const bet = activeBets.find((b: any) => b.id === stat.betId);

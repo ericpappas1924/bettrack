@@ -262,50 +262,106 @@ export function extractNFLPlayerStat(
   playerName: string,
   statType: string
 ): number | null {
-  console.log(`🔍 Looking for ${playerName}'s ${statType}`);
+  console.log(`\n${'='.repeat(80)}`);
+  console.log(`🔍 [NFL-API] EXTRACTING PLAYER STAT`);
+  console.log(`${'='.repeat(80)}`);
+  console.log(`📋 Input Parameters:`, {
+    playerName,
+    statType,
+    totalPlayersInBoxScore: Object.keys(boxScore.body.playerStats || {}).length
+  });
   
   const normalizePlayerName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
   const targetPlayerNorm = normalizePlayerName(playerName);
   
+  console.log(`\n🔍 [NFL-API] Step 1: Normalizing player name`);
+  console.log(`   Original: "${playerName}"`);
+  console.log(`   Normalized: "${targetPlayerNorm}"`);
+  
+  console.log(`\n🔍 [NFL-API] Step 2: Searching through players...`);
+  let playersChecked = 0;
+  let potentialMatches: string[] = [];
+  
   // Search through all players in the box score
   for (const [playerID, playerStat] of Object.entries(boxScore.body.playerStats)) {
+    playersChecked++;
     const fullName = playerStat.longName || '';
     const playerNameNorm = normalizePlayerName(fullName);
     
+    // Log first few players for debugging
+    if (playersChecked <= 5) {
+      console.log(`   Player ${playersChecked}: "${fullName}" (normalized: "${playerNameNorm}")`);
+    }
+    
+    // Check for partial matches
+    if (playerNameNorm.includes(targetPlayerNorm) || targetPlayerNorm.includes(playerNameNorm)) {
+      potentialMatches.push(fullName);
+    }
+    
     if (playerNameNorm.includes(targetPlayerNorm) || targetPlayerNorm.includes(playerNameNorm)) {
       // Found the player!
-      console.log(`✅ Found player: ${fullName}`);
+      console.log(`\n✅ [NFL-API] Step 2 Complete: Player FOUND!`);
+      console.log(`   Player Name: "${fullName}"`);
+      console.log(`   Player ID: ${playerID}`);
+      console.log(`   Team: ${playerStat.teamAbv || 'N/A'}`);
+      console.log(`   Players checked: ${playersChecked}/${Object.keys(boxScore.body.playerStats).length}`);
       
       // Check if this is a combined stat (e.g., "Passing + Rushing Yards")
       if (statType.includes('+')) {
+        console.log(`\n🔍 [NFL-API] Step 3: Combined stat detected`);
         const statParts = statType.split('+').map(s => s.trim());
+        console.log(`   Stat parts: ${statParts.join(', ')}`);
+        
         let totalValue = 0;
         const statValues: Record<string, number> = {};
         
         for (const part of statParts) {
+          console.log(`   Extracting "${part}"...`);
           const value = getSingleStatValue(playerStat, part);
           if (value !== null) {
             statValues[part] = value;
             totalValue += value;
+            console.log(`   ✅ "${part}": ${value}`);
           } else {
-            console.warn(`⚠️  Could not find ${part} for ${fullName}`);
+            console.warn(`   ⚠️  Could not find "${part}" for ${fullName}`);
           }
         }
         
-        console.log(`✅ Found ${fullName}'s ${statType}: ${JSON.stringify(statValues)} = ${totalValue}`);
+        console.log(`\n✅ [NFL-API] Combined stat result:`, {
+          statType,
+          statValues,
+          totalValue
+        });
         return totalValue;
       } else {
         // Single stat
+        console.log(`\n🔍 [NFL-API] Step 3: Single stat extraction`);
+        console.log(`   Stat type: "${statType}"`);
         const value = getSingleStatValue(playerStat, statType);
         if (value !== null) {
-          console.log(`✅ Found ${fullName}'s ${statType}: ${value}`);
+          console.log(`✅ [NFL-API] Stat found: ${value}`);
           return value;
+        } else {
+          console.error(`❌ [NFL-API] Stat not found in player data`);
+          console.error(`   Available categories:`, Object.keys(playerStat));
+          console.error(`   Passing stats:`, playerStat.Passing);
+          console.error(`   Rushing stats:`, playerStat.Rushing);
+          console.error(`   Receiving stats:`, playerStat.Receiving);
+          console.error(`   Defense stats:`, playerStat.Defense);
         }
       }
     }
   }
   
-  console.log(`❌ Player stat not found: ${playerName} - ${statType}`);
+  console.log(`\n❌ [NFL-API] Player NOT FOUND`);
+  console.log(`   Searched ${playersChecked} players`);
+  console.log(`   Looking for: "${playerName}" (normalized: "${targetPlayerNorm}")`);
+  if (potentialMatches.length > 0) {
+    console.log(`   ⚠️  Potential matches found:`, potentialMatches);
+  } else {
+    console.log(`   No similar player names found`);
+  }
+  console.log(`\n${'='.repeat(80)}\n`);
   return null;
 }
 

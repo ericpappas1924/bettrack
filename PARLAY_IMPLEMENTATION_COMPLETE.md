@@ -175,3 +175,4 @@ User sees settled bet with auto-settlement note
 
 **You were 100% right** - no need for a `raw_text` column! Everything we need is already parsed and stored in `notes`! 🎉
 
+

@@ -729,10 +729,33 @@ function extractTeamFromBet(parsed: ParsedBet): string {
     }
   }
   
-  // For straight bets, extract just the team name without odds
+  // For straight bets, handle spreads vs moneyline differently
   if (parsed.betType === 'Straight' && parsed.description) {
-    // Remove odds notation: "KC CHIEFS -185" -> "KC CHIEFS"
-    const cleanTeam = parsed.description.replace(/\s*[+-][\d½¼]+.*$/, '').trim();
+    // Check if this is a spread/total bet (has +/- followed by decimal/fraction, not just odds)
+    // Examples:
+    //   Spread: "TEN TITANS +4½-120" -> Keep "TEN TITANS +4.5"
+    //   Moneyline: "KC CHIEFS -185" -> Keep "KC CHIEFS"
+    //   Total: "Over 45.5-110" -> Keep "Over 45.5"
+    
+    // Match spread pattern: team name + spread (must have .5, ½, or single digit 0-20) + odds
+    // This distinguishes spreads (+4.5, -7, +10½) from moneylines (-185, +150)
+    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-](?:[\d]{1,2}(?:[\.½¼][05]?)?))(?:\s*[+-]\d{3,}|\s*\()/);
+    if (spreadMatch) {
+      const team = spreadMatch[1].trim();
+      const spread = spreadMatch[2].replace('½', '.5').replace('¼', '.25');
+      return `${team} ${spread}`;
+    }
+    
+    // Match total pattern: Over/Under + number + odds
+    const totalMatch = parsed.description.match(/^(Over|Under)\s*([\d]+(?:[\.½¼][05]?)?)(?:\s*[+-]\d|$)/i);
+    if (totalMatch) {
+      const direction = totalMatch[1];
+      const line = totalMatch[2].replace('½', '.5').replace('¼', '.25');
+      return `${direction} ${line}`;
+    }
+    
+    // Moneyline (just odds, no spread): "KC CHIEFS -185" -> "KC CHIEFS"
+    const cleanTeam = parsed.description.replace(/\s*[+-]\d{3,}.*$/, '').trim();
     return cleanTeam || parsed.description;
   }
   

@@ -1,4 +1,4 @@
-import { getSportFromText, isLiveBet, extractOddsFromText, getBetCategory, type Sport, type BetType, type BetCategory } from '@shared/betTypes';
+import { getSportFromText, isLiveBet, extractOddsFromText, getBetCategory, SPORTS, type Sport, type BetType, type BetCategory } from '@shared/betTypes';
 
 export interface ParsedBet {
   id: string;
@@ -588,11 +588,27 @@ export function parseBetPaste(rawText: string): ParseResult {
         market = propDetails.market;
         overUnder = propDetails.overUnder;
         line = propDetails.line;
-        // Re-detect sport by checking the game matchup first, then the block
-        sport = game ? getSportFromText(game) : getSportFromText(block);
-        // If still OTHER, try the whole block
-        if (sport === 'Other') {
-          sport = getSportFromText(block);
+        
+        // For player props, use market type to help determine sport
+        // Football-specific markets: Receiving Yards, Rushing Yards, Passing Yards, etc.
+        const marketUpper = (market || '').toUpperCase();
+        if (marketUpper.includes('RECEIVING YARDS') || marketUpper.includes('RUSHING YARDS') || 
+            marketUpper.includes('PASSING YARDS') || marketUpper.includes('RECEPTIONS') ||
+            marketUpper.includes('CARRIES') || marketUpper.includes('TOUCHDOWNS') ||
+            marketUpper.includes('PASS INTERCEPTIONS') || marketUpper.includes('COMPLETIONS')) {
+          // This is definitely football - check if NCAAF or NFL
+          sport = game ? getSportFromText(game) : SPORTS.NCAAF; // Default to NCAAF for college teams
+          if (sport === 'Other' || sport === 'NBA') {
+            // Force to NCAAF if we have football-specific markets (likely college)
+            sport = SPORTS.NCAAF;
+          }
+        } else {
+          // Re-detect sport by checking the game matchup first, then the block
+          sport = game ? getSportFromText(game) : getSportFromText(block);
+          // If still OTHER, try the whole block
+          if (sport === 'Other') {
+            sport = getSportFromText(block);
+          }
         }
       } else if (betType === 'Parlay' || betType === 'Teaser') {
         const parlayDetails = extractParlayDetails(block);

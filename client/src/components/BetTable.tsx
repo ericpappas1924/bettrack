@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
+import { useEffect } from "react";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
@@ -57,8 +58,32 @@ interface BetTableProps {
 
 export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchingCLV = new Set() }: BetTableProps) {
   const getLiveStatForBet = (betId: string) => {
-    return liveStats.find(stat => stat.betId === betId);
+    const stat = liveStats.find(stat => stat.betId === betId);
+    if (stat) {
+      console.log(`✅ [BET-TABLE] Found live stat for bet ${betId.substring(0, 8)}:`, {
+        playerName: stat.playerName,
+        currentValue: stat.currentValue,
+        targetValue: stat.targetValue,
+        isLive: stat.isLive
+      });
+    }
+    return stat;
   };
+  
+  // Debug: Log all live stats on mount/update
+  useEffect(() => {
+    if (liveStats.length > 0) {
+      console.log(`📊 [BET-TABLE] Total live stats: ${liveStats.length}`, liveStats.map(s => ({
+        betId: s.betId?.substring(0, 8),
+        playerName: s.playerName
+      })));
+      console.log(`📊 [BET-TABLE] Total bets: ${bets.length}`, bets.filter(b => b.status === 'active').map(b => ({
+        betId: b.id.substring(0, 8),
+        sport: b.sport,
+        betType: b.betType
+      })));
+    }
+  }, [liveStats, bets]);
   const formatCurrency = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "-";
     const num = typeof value === "string" ? parseFloat(value) : value;

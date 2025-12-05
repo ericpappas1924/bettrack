@@ -83,6 +83,22 @@ export async function registerRoutes(
         failed: activeBets.length - liveStats.length
       });
       
+      // Log what we're returning for debugging
+      if (liveStats.length > 0) {
+        console.log(`📤 [API] Returning live stats:`, liveStats.map(stat => ({
+          betId: stat.betId?.substring(0, 8),
+          betType: stat.betType,
+          playerName: stat.playerName,
+          currentValue: stat.currentValue,
+          targetValue: stat.targetValue,
+          isLive: stat.isLive,
+          isComplete: stat.isComplete,
+          status: stat.status
+        })));
+      } else {
+        console.log(`⚠️  [API] No live stats returned - all tracking may have failed`);
+      }
+      
       res.json(liveStats);
     } catch (error) {
       console.error(`❌ [API] Live stats error:`, {

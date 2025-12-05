@@ -61,7 +61,7 @@ export default function Dashboard() {
   });
 
   // Fetch live stats for ALL active bets that are currently live
-  const { data: liveStats = [], refetch: refetchLiveStats } = useQuery<LiveStat[]>({
+  const { data: liveStats = [], refetch: refetchLiveStats, isLoading: isLoadingLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
     refetchInterval: 60000, // Refetch every 60 seconds
     enabled: (() => {
@@ -73,11 +73,33 @@ export default function Dashboard() {
       
       if (liveBets.length > 0) {
         console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
+        console.log(`   Live bet IDs:`, liveBets.map(b => b.id.substring(0, 8)));
       }
       
       return liveBets.length > 0;
     })(),
   });
+
+  // Debug logging for live stats
+  useEffect(() => {
+    if (liveStats.length > 0) {
+      console.log(`✅ [DASHBOARD] Received ${liveStats.length} live stat(s):`, liveStats.map(stat => ({
+        betId: stat.betId?.substring(0, 8),
+        betType: stat.betType,
+        playerName: stat.playerName,
+        currentValue: stat.currentValue,
+        targetValue: stat.targetValue,
+        isLive: stat.isLive,
+        status: stat.status
+      })));
+    } else if (!isLoadingLiveStats && bets.some(b => {
+      if (b.status !== "active" || !b.gameStartTime) return false;
+      const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
+      return gameStatus === 'live';
+    })) {
+      console.warn(`⚠️  [DASHBOARD] No live stats received but live bets exist`);
+    }
+  }, [liveStats, isLoadingLiveStats, bets]);
 
   // Live stats are fetched via API with refetchInterval
   // Server-side scheduler ensures games are always tracked

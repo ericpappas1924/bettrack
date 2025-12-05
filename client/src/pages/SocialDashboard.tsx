@@ -441,62 +441,62 @@ export default function SocialDashboard() {
       </Dialog>
 
       <Dialog open={!!detailBet} onOpenChange={() => setDetailBet(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
               Bet Details
             </DialogTitle>
           </DialogHeader>
           {detailBet && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={detailBet.user.profileImageUrl || undefined} />
-                  <AvatarFallback>{getUserInitials(detailBet.user)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{getUserDisplayName(detailBet.user)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {detailBet.createdAt && new Date(detailBet.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{detailBet.sport}</Badge>
-                    <Badge variant="secondary">{detailBet.betType}</Badge>
-                    {detailBet.status !== 'active' && (
-                      <Badge variant={detailBet.result === 'won' ? 'default' : detailBet.result === 'lost' ? 'destructive' : 'secondary'}>
-                        {detailBet.result || detailBet.status}
-                      </Badge>
-                    )}
+            <ScrollArea className="flex-1 -mx-6 px-6">
+              <div className="space-y-4 pr-4">
+                <div className="flex items-center gap-3 pb-3 border-b">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={detailBet.user.profileImageUrl || undefined} />
+                    <AvatarFallback>{getUserInitials(detailBet.user)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{getUserDisplayName(detailBet.user)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {detailBet.createdAt && new Date(detailBet.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
-                  <span className="font-mono font-bold text-lg">{formatOdds(detailBet.openingOdds)}</span>
                 </div>
 
-                <p className="font-semibold text-lg">{detailBet.team}</p>
-                
-                {detailBet.game && (
-                  <p className="text-muted-foreground">{detailBet.game}</p>
-                )}
-
-                {detailBet.player && detailBet.market && (
-                  <p className="text-muted-foreground">
-                    {detailBet.player} {detailBet.overUnder} {detailBet.line} {detailBet.market}
-                  </p>
-                )}
-              </div>
-
-              {(detailBet.betType === 'Parlay' || detailBet.betType === 'Teaser') && (
                 <div className="space-y-2">
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <Target className="h-4 w-4" />
-                    Legs ({parseParlayLegs(detailBet.notes).length})
-                  </h4>
-                  <ScrollArea className="max-h-64">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{detailBet.sport}</Badge>
+                      <Badge variant="secondary">{detailBet.betType}</Badge>
+                      {detailBet.status !== 'active' && (
+                        <Badge variant={detailBet.result === 'won' ? 'default' : detailBet.result === 'lost' ? 'destructive' : 'secondary'}>
+                          {detailBet.result || detailBet.status}
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold text-lg">{formatOdds(detailBet.openingOdds)}</span>
+                  </div>
+
+                  <p className="font-semibold text-lg">{detailBet.team}</p>
+                  
+                  {detailBet.game && (
+                    <p className="text-muted-foreground">{detailBet.game}</p>
+                  )}
+
+                  {detailBet.player && detailBet.market && (
+                    <p className="text-muted-foreground">
+                      {detailBet.player} {detailBet.overUnder} {detailBet.line} {detailBet.market}
+                    </p>
+                  )}
+                </div>
+
+                {(detailBet.betType === 'Parlay' || detailBet.betType === 'Teaser') && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Target className="h-4 w-4" />
+                      Legs ({parseParlayLegs(detailBet.notes).length})
+                    </h4>
                     <div className="space-y-2">
                       {parseParlayLegs(detailBet.notes).length > 0 ? (
                         parseParlayLegs(detailBet.notes).map((leg, idx) => (
@@ -540,37 +540,37 @@ export default function SocialDashboard() {
                         </p>
                       )}
                     </div>
-                  </ScrollArea>
-                </div>
-              )}
+                  </div>
+                )}
 
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t">
-                <div>
-                  <p className="text-sm text-muted-foreground">Stake</p>
-                  <p className="font-semibold">${detailBet.stake}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Potential Win</p>
-                  <p className="font-semibold">${detailBet.potentialWin || '—'}</p>
-                </div>
-                {detailBet.clv && (
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t">
                   <div>
-                    <p className="text-sm text-muted-foreground">CLV</p>
-                    <p className={`font-semibold ${parseFloat(detailBet.clv) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {parseFloat(detailBet.clv) >= 0 ? '+' : ''}{detailBet.clv}%
-                    </p>
+                    <p className="text-sm text-muted-foreground">Stake</p>
+                    <p className="font-semibold">${detailBet.stake}</p>
                   </div>
-                )}
-                {detailBet.profit && detailBet.status === 'settled' && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Profit</p>
-                    <p className={`font-semibold ${parseFloat(detailBet.profit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {parseFloat(detailBet.profit) >= 0 ? '+' : ''}${detailBet.profit}
-                    </p>
+                    <p className="text-sm text-muted-foreground">Potential Win</p>
+                    <p className="font-semibold">${detailBet.potentialWin || '—'}</p>
                   </div>
-                )}
+                  {detailBet.clv && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">CLV</p>
+                      <p className={`font-semibold ${parseFloat(detailBet.clv) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {parseFloat(detailBet.clv) >= 0 ? '+' : ''}{detailBet.clv}%
+                      </p>
+                    </div>
+                  )}
+                  {detailBet.profit && detailBet.status === 'settled' && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Profit</p>
+                      <p className={`font-semibold ${parseFloat(detailBet.profit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {parseFloat(detailBet.profit) >= 0 ? '+' : ''}${detailBet.profit}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </ScrollArea>
           )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDetailBet(null)} data-testid="button-close-details">

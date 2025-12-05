@@ -322,63 +322,138 @@ function extractPlayerPropDetails(block: string): {
 }
 
 function extractParlayDetails(block: string): { legs: string[]; description: string; gameStartTime: Date | null } {
-  // Pattern captures: [DATE] [SPORT] - [NUMBER] BET_DETAILS [STATUS] (Score: X-Y)
-  // Need to capture status tags and scores too
-  const legPattern = /\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*([^\n]+)/g;
+  // Pattern 1: Standard format - [DATE] [SPORT] - [NUMBER] BET_DETAILS [STATUS]
+  // Pattern 2: UFC format - [DATE] [MU] - EVENT INFO\n[NUMBER] FIGHTER ODDS (FIGHTER1 vrs FIGHTER2) [STATUS]
   const legs: string[] = [];
   const gameTimes: Date[] = [];
   
-  // Find all matches first
-  const matches = Array.from(block.matchAll(legPattern));
+  // Split block into lines for processing
+  const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   
-  for (const match of matches) {
-    const gameDate = match[1]; // e.g., "Dec-07-2025 01:00 PM"
-    const sport = match[2]; // e.g., "NFL"
-    const lineNum = match[3]; // e.g., "121"
-    let fullLegText = match[4].trim(); // e.g., "WAS COMMANDERS +2-110 [Pending]"
+  console.log(`🔍 [PARSER] Extracting parlay legs from ${lines.length} lines`);
+  
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    console.log(`   Line ${i}: "${line.substring(0, 80)}${line.length > 80 ? '...' : ''}"`);
     
-    // Extract status and score from the end
-    const statusMatch = fullLegText.match(/(\[(?:Pending|Won|Lost)\])?\s*(\(Score:\s*[\d-]+\))?$/);
-    
-    let betDetail = fullLegText;
-    let status = '';
-    let score = '';
-    
-    if (statusMatch) {
-      // Remove status and score from the end to get just bet details
-      betDetail = fullLegText.substring(0, fullLegText.length - statusMatch[0].length).trim();
-      status = statusMatch[1] || '';
-      score = statusMatch[2] || '';
-    }
-    
-    // Clean up extra whitespace in bet detail
-    betDetail = betDetail.replace(/\s+/g, ' ').trim();
-    
-    // Store full leg with date/sport AND status for tracking later
-    const legWithDate = `[${gameDate}] [${sport}] ${betDetail} ${status}${score}`.trim();
-    legs.push(legWithDate);
-    
-    // Try to parse the game time for this leg
-    try {
-      const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
-      if (dateTimeMatch) {
-        const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
-        const months: { [key: string]: number } = {
-          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-        };
-        let hour = parseInt(hours);
-        if (period === 'PM' && hour !== 12) hour += 12;
-        if (period === 'AM' && hour === 12) hour = 0;
-        gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
+    // Try standard format: [DATE] [SPORT] - [NUMBER] BET_DETAILS
+    const standardMatch = line.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*-\s*\[(\d+)\]\s*(.+)/);
+    if (standardMatch) {
+      const gameDate = standardMatch[1];
+      const sport = standardMatch[2];
+      const lineNum = standardMatch[3];
+      let fullLegText = standardMatch[4].trim();
+      
+      // Extract status and score from the end
+      const statusMatch = fullLegText.match(/(\[(?:Pending|Won|Lost)\])?\s*(\(Score:\s*[\d-]+\))?$/);
+      
+      let betDetail = fullLegText;
+      let status = '';
+      let score = '';
+      
+      if (statusMatch) {
+        betDetail = fullLegText.substring(0, fullLegText.length - statusMatch[0].length).trim();
+        status = statusMatch[1] || '';
+        score = statusMatch[2] || '';
       }
-    } catch (e) {
-      // If parsing fails, skip this time
+      
+      betDetail = betDetail.replace(/\s+/g, ' ').trim();
+      const legWithDate = `[${gameDate}] [${sport}] ${betDetail} ${status}${score}`.trim();
+      legs.push(legWithDate);
+      
+      // Parse game time
+      try {
+        const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+        if (dateTimeMatch) {
+          const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+          const months: { [key: string]: number } = {
+            'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+            'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+          };
+          let hour = parseInt(hours);
+          if (period === 'PM' && hour !== 12) hour += 12;
+          if (period === 'AM' && hour === 12) hour = 0;
+          gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
+        }
+      } catch (e) {
+        // Skip if parsing fails
+      }
+      
+      i++;
+      continue;
     }
+    
+    // Try UFC format: [DATE] [MU] - EVENT INFO (first line)
+    // Then next line: [NUMBER] FIGHTER ODDS (FIGHTER1 vrs FIGHTER2) [STATUS]
+    const ufcHeaderMatch = line.match(/\[([^\]]+)\]\s*\[MU\]\s*-\s*(.+)/);
+    if (ufcHeaderMatch) {
+      console.log(`   ✅ Found UFC header match`);
+      const gameDate = ufcHeaderMatch[1];
+      const eventInfo = ufcHeaderMatch[2].trim();
+      
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        console.log(`   Checking next line: "${nextLine.substring(0, 80)}${nextLine.length > 80 ? '...' : ''}"`);
+        
+        // Check if next line has the fighter/odds format
+        // Pattern: [24550] MANSUR ABDUL-MALIK -1300 (ANTONIO TROCOLI vrs MANSUR ABDUL-MALIK) [Pending]
+        // More flexible: allow for various spacing
+        const ufcFighterMatch = nextLine.match(/\[(\d+)\]\s*(.+?)\s+(-?\d+)\s*\(([^)]+)\)\s*(\[(?:Pending|Won|Lost)\])?/);
+        if (ufcFighterMatch) {
+          console.log(`   ✅ Found UFC fighter match`);
+          const lineNum = ufcFighterMatch[1];
+          const fighterName = ufcFighterMatch[2].trim();
+          const odds = ufcFighterMatch[3];
+          const matchup = ufcFighterMatch[4].trim(); // "ANTONIO TROCOLI vrs MANSUR ABDUL-MALIK"
+          const status = ufcFighterMatch[5] || '';
+          
+          // Format: Fighter Name - Odds (Fighter1 vs Fighter2)
+          const betDetail = `${fighterName} ${odds} (${matchup})`;
+          const legWithDate = `[${gameDate}] [MU] ${betDetail} ${status}`.trim();
+          legs.push(legWithDate);
+          
+          console.log(`   ✅ [PARSER] Extracted UFC leg:`, legWithDate);
+          
+          // Parse game time
+          try {
+            const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+            if (dateTimeMatch) {
+              const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+              const months: { [key: string]: number } = {
+                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+              };
+              let hour = parseInt(hours);
+              if (period === 'PM' && hour !== 12) hour += 12;
+              if (period === 'AM' && hour === 12) hour = 0;
+              gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
+            }
+          } catch (e) {
+            // Skip if parsing fails
+          }
+          
+          i += 2; // Skip both lines
+          continue;
+        } else {
+          console.log(`   ❌ Next line doesn't match UFC fighter pattern`);
+        }
+      } else {
+        console.log(`   ❌ No next line available for UFC leg`);
+      }
+    }
+    
+    // No match, move to next line
+    i++;
   }
   
   const parlayTeamMatch = block.match(/PARLAY\s*\((\d+)\s*TEAMS?\)/i);
   const teamCount = parlayTeamMatch ? parlayTeamMatch[1] : legs.length.toString();
+  
+  console.log(`✅ [PARSER] Extracted ${legs.length} leg(s) from parlay:`);
+  legs.forEach((leg, idx) => {
+    console.log(`   ${idx + 1}. ${leg.substring(0, 100)}${leg.length > 100 ? '...' : ''}`);
+  });
   
   // Use the earliest game time from all legs
   const gameStartTime = gameTimes.length > 0 ? gameTimes.sort((a, b) => a.getTime() - b.getTime())[0] : null;

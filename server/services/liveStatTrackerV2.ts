@@ -6,6 +6,7 @@
 
 import * as scoreRoom from './scoreRoomApi';
 import * as ballDontLie from './ballDontLieApi';
+import * as nflApi from './nflApi';
 import { storage } from '../storage';
 import { getGameStatus, GAME_STATUS, type Sport } from '@shared/betTypes';
 
@@ -357,6 +358,199 @@ async function trackNBABet(
 }
 
 /**
+ * Track NFL bet using NFL API (Tank01 Real-Time Stats)
+ */
+async function trackNFLBet(
+  bet: any,
+  betDetails: any,
+  gameId: string
+): Promise<LiveStatProgress | null> {
+  const betId = bet.id.substring(0, 8);
+  
+  try {
+    console.log(`🔍 [NFL-TRACKER] Fetching box score:`, { betId, gameId });
+    
+    // Get NFL box score
+    const boxScore = await nflApi.fetchNFLBoxScore(gameId);
+    if (!boxScore) {
+      console.error(`❌ [NFL-TRACKER] Box score not found:`, { betId, gameId });
+      return null;
+    }
+    
+    console.log(`✅ [NFL-TRACKER] Box score received:`, {
+      betId,
+      gameId,
+      gameStatus: boxScore.body.gameStatus,
+      home: boxScore.body.home,
+      away: boxScore.body.away,
+      score: `${boxScore.body.away} ${boxScore.body.awayPts}, ${boxScore.body.home} ${boxScore.body.homePts}`,
+    });
+    
+    // Get current scores and status
+    const awayScore = parseInt(boxScore.body.awayPts) || 0;
+    const homeScore = parseInt(boxScore.body.homePts) || 0;
+    const gameStatus = nflApi.getNFLGameStatus(boxScore);
+    const isLive = nflApi.isNFLGameLive(boxScore);
+    const isComplete = nflApi.isNFLGameCompleted(boxScore);
+    
+    console.log(`   📊 Score: ${boxScore.body.away} ${awayScore}, ${boxScore.body.home} ${homeScore} (${gameStatus})`);
+    
+    // Base response
+    const baseResponse: LiveStatProgress = {
+      betId: bet.id,
+      gameId: gameId,
+      sport: bet.sport,
+      betType: betDetails.betType,
+      awayTeam: boxScore.body.away,
+      homeTeam: boxScore.body.home,
+      awayScore,
+      homeScore,
+      gameStatus,
+      isLive,
+      isComplete,
+      isWinning: false,
+      lastUpdated: new Date(),
+    };
+    
+    // Calculate bet status based on type
+    switch (betDetails.betType) {
+      case 'Straight': {
+        // Moneyline
+        const betTeam = betDetails.team || '';
+        const betTeamNorm = betTeam.toUpperCase().replace(/[^A-Z]/g, '');
+        const homeTeamNorm = boxScore.body.home.toUpperCase().replace(/[^A-Z]/g, '');
+        const awayTeamNorm = boxScore.body.away.toUpperCase().replace(/[^A-Z]/g, '');
+        
+        const isBettingHome = homeTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(homeTeamNorm);
+        const isBettingAway = awayTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(awayTeamNorm);
+        
+        let isWinning = false;
+        if (isBettingHome) {
+          isWinning = homeScore > awayScore;
+        } else if (isBettingAway) {
+          isWinning = awayScore > homeScore;
+        }
+        
+        console.log(`   💰 Moneyline: Betting on ${betTeam}, ${isWinning ? 'WINNING' : 'LOSING'}`);
+        
+        return {
+          ...baseResponse,
+          betTeam,
+          isWinning,
+        };
+      }
+      
+      case 'Spread': {
+        const betTeam = betDetails.team || '';
+        const spread = betDetails.spread || 0;
+        
+        const betTeamNorm = betTeam.toUpperCase().replace(/[^A-Z]/g, '');
+        const homeTeamNorm = boxScore.body.home.toUpperCase().replace(/[^A-Z]/g, '');
+        const awayTeamNorm = boxScore.body.away.toUpperCase().replace(/[^A-Z]/g, '');
+        
+        const isBettingHome = homeTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(homeTeamNorm);
+        const isBettingAway = awayTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(awayTeamNorm);
+        
+        let isWinning = false;
+        if (isBettingHome) {
+          isWinning = (homeScore + spread) > awayScore;
+        } else if (isBettingAway) {
+          isWinning = (awayScore + spread) > homeScore;
+        }
+        
+        console.log(`   💰 Spread ${spread}: ${betTeam} ${isWinning ? 'COVERING' : 'NOT COVERING'}`);
+        
+        return {
+          ...baseResponse,
+          betTeam,
+          betLine: spread,
+          isWinning,
+        };
+      }
+      
+      case 'Total': {
+        const totalLine = betDetails.total || 0;
+        const isOver = betDetails.isOver || false;
+        const combinedScore = awayScore + homeScore;
+        
+        const isWinning = isOver 
+          ? combinedScore > totalLine 
+          : combinedScore < totalLine;
+        
+        console.log(`   💰 ${isOver ? 'Over' : 'Under'} ${totalLine}: Combined ${combinedScore}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
+        
+        return {
+          ...baseResponse,
+          totalLine,
+          isOver,
+          isWinning,
+        };
+      }
+      
+      case 'Player Prop': {
+        console.log(`📊 [NFL-TRACKER] Extracting player stats:`, {
+          betId,
+          playerName: betDetails.playerName,
+          statType: betDetails.statType,
+          target: betDetails.targetValue
+        });
+        
+        // Extract player stat from box score
+        const currentValue = nflApi.extractNFLPlayerStat(
+          boxScore,
+          betDetails.playerName || '',
+          betDetails.statType || ''
+        );
+        
+        if (currentValue === null) {
+          console.error(`❌ [NFL-TRACKER] Player stat not found:`, {
+            betId,
+            playerName: betDetails.playerName,
+            statType: betDetails.statType
+          });
+          // Return null so bet is NOT auto-settled without actual stats
+          return null;
+        }
+        
+        const targetValue = betDetails.targetValue || 0;
+        const isOver = betDetails.isOver || false;
+        
+        const isWinning = isOver 
+          ? currentValue >= targetValue 
+          : currentValue <= targetValue;
+        
+        let progress = 0;
+        if (isOver) {
+          progress = Math.min(100, (currentValue / targetValue) * 100);
+        } else {
+          progress = currentValue <= targetValue ? 100 : 0;
+        }
+        
+        console.log(`   💰 ${betDetails.playerName} ${isOver ? 'Over' : 'Under'} ${targetValue}: Current ${currentValue}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
+        
+        return {
+          ...baseResponse,
+          playerName: betDetails.playerName,
+          statType: betDetails.statType,
+          targetValue,
+          currentValue,
+          progress: Math.round(progress),
+          isOver,
+          isWinning,
+        };
+      }
+      
+      default:
+        console.log(`   ⚠️  Unknown bet type: ${betDetails.betType}`);
+        return baseResponse;
+    }
+  } catch (error) {
+    console.error(`   ❌ Error tracking NFL bet:`, error);
+    return null;
+  }
+}
+
+/**
  * Track live stats for a single bet
  */
 export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | null> {
@@ -426,6 +620,21 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
   if (bet.sport === 'NBA') {
     console.log(`🏀 [TRACKER] Routing to BALLDONTLIE for NBA bet ${betId}`);
     return trackNBABet(bet, betDetails, team1, team2);
+  }
+  
+  // ========== NFL: Use NFL API ==========
+  if (bet.sport === 'NFL') {
+    console.log(`🏈 [TRACKER] Routing to NFL API for NFL bet ${betId}`);
+    // NFL API requires gameID - check if we have it in bet.notes
+    const gameIdMatch = bet.notes?.match(/Game ID: (\d+_[A-Z]+@[A-Z]+)/);
+    if (!gameIdMatch) {
+      console.log(`❌ [NFL-TRACKER] No gameID found in bet notes. NFL API requires gameID.`);
+      console.log(`   Add gameID to bet notes like: "Game ID: 20241020_CAR@WSH"`);
+      return null;
+    }
+    const gameId = gameIdMatch[1];
+    console.log(`📋 [NFL-TRACKER] Using gameID: ${gameId}`);
+    return trackNFLBet(bet, betDetails, gameId);
   }
   
   // ========== Other Sports: Use Score Room API ==========

@@ -466,8 +466,51 @@ export async function batchFindGameStartTimes(
           const home = e.home_team.toLowerCase();
           const away = e.away_team.toLowerCase();
           
-          return (matchupLower.includes(home) || home.includes(matchupLower)) &&
-                 (matchupLower.includes(away) || away.includes(matchupLower));
+          // Helper function to normalize team names (remove common suffixes for better matching)
+          const normalizeTeam = (name: string): string => {
+            // Remove common NCAAF/NFL team suffixes
+            return name
+              .replace(/\s+(hoosiers|buckeyes|wolverines|spartans|badgers|wildcats|hawkeyes|gophers|huskers|boilermakers|nittany lions|scarlet knights|terrapins|cavaliers|hokies|demon deacons|tar heels|blue devils|yellow jackets|seminoles|hurricanes|tigers|bulldogs|crimson tide|gamecocks|volunteers|razorbacks|gators|aggies|longhorns|sooners|cougars|utes|trojans|bruins|cardinal|golden bears|beavers|ducks|huskies|sun devils|buffaloes|lobos|rams|aztecs|warriors|rainbow warriors|falcons|broncos|wolf pack|rebels|running rebels|miners|roadrunners|owls|panthers|green wave|mean green|pirates|thundering herd|chippewas|eagles|rockets|redhawks|cardinals|zips|bobcats|bulls|flashes|golden flashes|golden eagles|golden grizzlies|raiders|vandals|bengals|mustangs|thunderbirds|horned frogs|red raiders|cowboys|mountaineers|cyclones|jayhawks|bears|buffs)$/i, '')
+              .trim();
+          };
+          
+          // Split matchup into two teams
+          const teams = matchupLower.split(/\s+vs\s+/);
+          if (teams.length !== 2) {
+            // Try alternative separators
+            const altTeams = matchupLower.split(/\s+vrs\s+/);
+            if (altTeams.length === 2) {
+              teams[0] = altTeams[0].trim();
+              teams[1] = altTeams[1].trim();
+            } else {
+              // Fallback: try to match whole matchup string
+              return (matchupLower.includes(home) || home.includes(matchupLower)) &&
+                     (matchupLower.includes(away) || away.includes(matchupLower));
+            }
+          }
+          
+          const team1 = teams[0].trim();
+          const team2 = teams[1].trim();
+          
+          // Normalize team names for better matching
+          const team1Norm = normalizeTeam(team1);
+          const team2Norm = normalizeTeam(team2);
+          const homeNorm = normalizeTeam(home);
+          const awayNorm = normalizeTeam(away);
+          
+          // Match if team1 matches one side and team2 matches the other
+          // Check both normalized and original names for flexibility
+          const team1MatchesHome = home.includes(team1) || team1.includes(home) || 
+                                   (team1Norm && homeNorm && (homeNorm.includes(team1Norm) || team1Norm.includes(homeNorm)));
+          const team1MatchesAway = away.includes(team1) || team1.includes(away) || 
+                                   (team1Norm && awayNorm && (awayNorm.includes(team1Norm) || team1Norm.includes(awayNorm)));
+          const team2MatchesHome = home.includes(team2) || team2.includes(home) || 
+                                   (team2Norm && homeNorm && (homeNorm.includes(team2Norm) || team2Norm.includes(homeNorm)));
+          const team2MatchesAway = away.includes(team2) || team2.includes(away) || 
+                                   (team2Norm && awayNorm && (awayNorm.includes(team2Norm) || team2Norm.includes(awayNorm)));
+          
+          // Match if team1 matches one side and team2 matches the other
+          return (team1MatchesHome && team2MatchesAway) || (team1MatchesAway && team2MatchesHome);
         });
         
         if (matchingEvent) {

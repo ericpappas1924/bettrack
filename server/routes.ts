@@ -240,12 +240,14 @@ export async function registerRoutes(
           console.log(`Game times map:`, Array.from(gameTimesMap.entries()).slice(0, 5));
           
           // Update bets with found game times
+          let newlyEnriched = 0;
           betsWithUser = betsWithUser.map((bet: any) => {
             if (!bet.gameStartTime && bet.game && bet.sport) {
               const key = `${bet.sport}:${bet.game}`;
               const gameTime = gameTimesMap.get(key);
               if (gameTime) {
                 console.log(`✓ Found time for ${bet.game}: ${gameTime}`);
+                newlyEnriched++;
                 return { ...bet, gameStartTime: gameTime };
               } else {
                 console.log(`✗ No time found for ${bet.game} (key: ${key})`);
@@ -254,7 +256,7 @@ export async function registerRoutes(
             return bet;
           });
           
-          enrichedGameTimes = enrichedGameTimes + betsNeedingTimes.length - betsNeedingTimes.filter((b: any) => !times.has(b.matchup + '|' + b.sport)).length;
+          enrichedGameTimes = newlyEnriched;
           console.log(`\n📊 ENRICHMENT SUMMARY:`);
           console.log(`   Enriched: ${enrichedGameTimes} bets with game times`);
           console.log(`   Missing: ${betsWithUser.length - enrichedGameTimes} bets without times`);

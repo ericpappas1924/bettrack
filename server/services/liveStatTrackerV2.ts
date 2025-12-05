@@ -61,7 +61,8 @@ function parseBetDetails(bet: any): {
   
   // Player Prop parsing
   if (betType === 'Player Prop' || betType.toLowerCase().includes('prop')) {
-    const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s]+)/i;
+    // Updated regex to include '+' in stat type (for PRA, Points + Rebounds, etc.)
+    const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i;
     const match = description.match(overUnderPattern);
     
     if (match) {

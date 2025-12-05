@@ -10,6 +10,26 @@
 const NFL_API_BASE_URL = 'https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com';
 const NFL_API_KEY = process.env.NFL_API_KEY || '5aaf3296famshd3c518353a94e2dp12c3f4jsne3f90b576695';
 
+// Rate limiting: Minimum delay between requests (in milliseconds)
+const MIN_REQUEST_DELAY = 2000; // 2 seconds between requests
+let lastRequestTime = 0;
+
+/**
+ * Throttle requests to avoid rate limiting
+ */
+async function throttleRequest(): Promise<void> {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  
+  if (timeSinceLastRequest < MIN_REQUEST_DELAY) {
+    const waitTime = MIN_REQUEST_DELAY - timeSinceLastRequest;
+    console.log(`⏳ [NFL-API] Throttling: Waiting ${waitTime}ms before next request...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+  
+  lastRequestTime = Date.now();
+}
+
 interface NFLPlayerStats {
   playerID: string;
   longName: string;
@@ -76,6 +96,9 @@ interface NFLBoxScore {
  * Make a request to the NFL API with retry logic for rate limiting
  */
 async function makeNFLApiRequest(endpoint: string, params: Record<string, any> = {}, retries = 3): Promise<any> {
+  // Throttle requests to avoid rate limiting
+  await throttleRequest();
+  
   const queryString = new URLSearchParams(params).toString();
   const url = `${NFL_API_BASE_URL}${endpoint}${queryString ? '?' + queryString : ''}`;
   
@@ -93,11 +116,13 @@ async function makeNFLApiRequest(endpoint: string, params: Record<string, any> =
       // Handle rate limiting (429)
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
-        const waitTime = Math.min(retryAfter * 1000, 60000); // Max 60 seconds
+        const waitTime = Math.min(retryAfter * 1000, 120000); // Max 120 seconds (2 minutes)
         
         if (attempt < retries) {
           console.warn(`⚠️  [NFL-API] Rate limited (429). Waiting ${waitTime/1000}s before retry ${attempt + 1}/${retries}...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
+          // Reset throttle after long wait
+          lastRequestTime = Date.now();
           continue; // Retry
         } else {
           console.error(`❌ [NFL-API] Rate limited (429) after ${retries} retries. Giving up.`);
@@ -117,9 +142,11 @@ async function makeNFLApiRequest(endpoint: string, params: Record<string, any> =
     } catch (error: any) {
       // If it's a rate limit error and we have retries left, continue loop
       if (error.message?.includes('429') && attempt < retries) {
-        const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+        const waitTime = Math.pow(2, attempt) * 2000; // Exponential backoff: 2s, 4s, 8s
         console.warn(`⚠️  [NFL-API] Retryable error. Waiting ${waitTime/1000}s before retry ${attempt + 1}/${retries}...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
+        // Reset throttle after long wait
+        lastRequestTime = Date.now();
         continue;
       }
       

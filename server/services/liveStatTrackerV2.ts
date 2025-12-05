@@ -1025,11 +1025,36 @@ export async function trackMultipleBets(bets: any[]): Promise<any[]> {
   
   const results: LiveStatProgress[] = [];
   
-  // Process bets in batches to avoid rate limiting
+  // Separate NFL bets from other bets (NFL needs slower processing)
+  const nflBets = bets.filter(b => b.sport === 'NFL');
+  const otherBets = bets.filter(b => b.sport !== 'NFL');
+  
+  console.log(`📊 Bet breakdown: ${nflBets.length} NFL, ${otherBets.length} other`);
+  
+  // Process NFL bets SEQUENTIALLY with delays to avoid rate limiting
+  console.log(`\n🏈 Processing ${nflBets.length} NFL bet(s) sequentially...`);
+  for (let i = 0; i < nflBets.length; i++) {
+    const bet = nflBets[i];
+    console.log(`   [${i + 1}/${nflBets.length}] Processing NFL bet ${bet.id.substring(0, 8)}...`);
+    
+    const result = await trackBetLiveStats(bet);
+    if (result) {
+      results.push(result);
+    }
+    
+    // Wait 3 seconds between NFL bets to avoid rate limiting
+    if (i < nflBets.length - 1) {
+      console.log(`   ⏳ Waiting 3s before next NFL bet...`);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+  
+  // Process other bets in batches (can be parallel)
+  console.log(`\n🏀 Processing ${otherBets.length} other bet(s) in batches...`);
   const BATCH_SIZE = 5;
   
-  for (let i = 0; i < bets.length; i += BATCH_SIZE) {
-    const batch = bets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < otherBets.length; i += BATCH_SIZE) {
+    const batch = otherBets.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map(bet => trackBetLiveStats(bet))
     );
@@ -1037,7 +1062,7 @@ export async function trackMultipleBets(bets: any[]): Promise<any[]> {
     results.push(...batchResults.filter((r): r is LiveStatProgress => r !== null));
     
     // Small delay between batches
-    if (i + BATCH_SIZE < bets.length) {
+    if (i + BATCH_SIZE < otherBets.length) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }

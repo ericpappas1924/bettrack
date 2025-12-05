@@ -643,14 +643,23 @@ export function parseBetPaste(rawText: string): ParseResult {
           status = 'pending';
         }
       } else {
-        // For non-parlay bets, use simple detection
-        if (statusText.includes('won') || statusText.includes('win')) {
+        // For non-parlay bets, use more specific detection
+        // Only match explicit status words, not words containing them (e.g., "Winner" should not match "win")
+        // Match whole words or status tags like [Won], [Lost], [Pending]
+        const wonMatch = statusText.match(/\b(won|\[won\])\b/);
+        const lostMatch = statusText.match(/\b(lost|\[lost\])\b/);
+        const pendingMatch = statusText.match(/\b(pending|\[pending\])\b/);
+        
+        if (wonMatch && !statusText.includes('winner')) {
+          // Match "won" but not "winner" (which is part of bet type like "Winner (2 way)")
           status = 'won';
-        } else if (statusText.includes('lost') || statusText.includes('loss')) {
+        } else if (lostMatch && !statusText.includes('loss')) {
+          // Match "lost" but be careful with words containing it
           status = 'lost';
-        } else if (statusText.includes('pending')) {
+        } else if (pendingMatch) {
           status = 'pending';
         }
+        // Default remains 'pending' if no status found
       }
       
       // Detect parsing issues

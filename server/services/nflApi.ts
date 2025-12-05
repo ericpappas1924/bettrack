@@ -73,40 +73,69 @@ interface NFLBoxScore {
 }
 
 /**
- * Make a request to the NFL API
+ * Make a request to the NFL API with retry logic for rate limiting
  */
-async function makeNFLApiRequest(endpoint: string, params: Record<string, any> = {}): Promise<any> {
+async function makeNFLApiRequest(endpoint: string, params: Record<string, any> = {}, retries = 3): Promise<any> {
   const queryString = new URLSearchParams(params).toString();
   const url = `${NFL_API_BASE_URL}${endpoint}${queryString ? '?' + queryString : ''}`;
   
-  console.log(`📡 [NFL-API] ${endpoint}`, { params, url });
+  console.log(`📡 [NFL-API] ${endpoint}`, { params, url, retriesLeft: retries });
   
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'x-rapidapi-host': 'tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com',
-        'x-rapidapi-key': NFL_API_KEY,
-      },
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ [NFL-API] Error ${response.status}: ${errorText}`);
-      throw new Error(`NFL API error: ${response.status} ${response.statusText}`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'x-rapidapi-host': 'tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com',
+          'x-rapidapi-key': NFL_API_KEY,
+        },
+      });
+      
+      // Handle rate limiting (429)
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
+        const waitTime = Math.min(retryAfter * 1000, 60000); // Max 60 seconds
+        
+        if (attempt < retries) {
+          console.warn(`⚠️  [NFL-API] Rate limited (429). Waiting ${waitTime/1000}s before retry ${attempt + 1}/${retries}...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue; // Retry
+        } else {
+          console.error(`❌ [NFL-API] Rate limited (429) after ${retries} retries. Giving up.`);
+          throw new Error(`NFL API rate limit exceeded. Please wait before trying again.`);
+        }
+      }
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ [NFL-API] Error ${response.status}: ${errorText}`);
+        throw new Error(`NFL API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ [NFL-API] Success:`, { endpoint, dataLength: data?.body?.length || data?.statusCode });
+      return data;
+    } catch (error: any) {
+      // If it's a rate limit error and we have retries left, continue loop
+      if (error.message?.includes('429') && attempt < retries) {
+        const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+        console.warn(`⚠️  [NFL-API] Retryable error. Waiting ${waitTime/1000}s before retry ${attempt + 1}/${retries}...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
+      }
+      
+      // Final attempt failed or non-retryable error
+      console.error(`❌ [NFL-API] Request failed:`, { 
+        endpoint, 
+        attempt: attempt + 1,
+        error: error.message,
+        stack: error.stack,
+        cause: error.cause 
+      });
+      throw error;
     }
-    
-    const data = await response.json();
-    console.log(`✅ [NFL-API] Success:`, { endpoint, dataLength: data?.body?.length || data?.statusCode });
-    return data;
-  } catch (error: any) {
-    console.error(`❌ [NFL-API] Request failed:`, { 
-      endpoint, 
-      error: error.message,
-      stack: error.stack,
-      cause: error.cause 
-    });
-    throw error;
   }
+  
+  throw new Error('NFL API request failed after all retries');
 }
 
 /**

@@ -64,11 +64,18 @@ function parseBetDetails(bet: any): {
   console.log(`   Input description: "${description}"`);
   console.log(`   Input betType: "${betType}"`);
   
-  // Player Prop parsing
-  if (betType === 'Player Prop' || betType.toLowerCase().includes('prop')) {
-    console.log(`   ✅ Detected Player Prop bet type`);
-    // Updated regex to include '+' in stat type (for PRA, Points + Rebounds, etc.)
-    const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i;
+  // Player Prop parsing - Check BOTH betType AND description pattern
+  // This handles cases where betType might be wrong in database
+  const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i;
+  const isPlayerPropByType = betType === 'Player Prop' || betType.toLowerCase().includes('prop');
+  const isPlayerPropByPattern = description.match(overUnderPattern);
+  
+  console.log(`   Bet type check: ${isPlayerPropByType ? '✅ Player Prop' : '❌ Not Player Prop'}`);
+  console.log(`   Pattern check: ${isPlayerPropByPattern ? '✅ Matches Player Prop pattern' : '❌ No match'}`);
+  
+  // If betType says Player Prop OR description matches Player Prop pattern
+  if (isPlayerPropByType || isPlayerPropByPattern) {
+    console.log(`   ✅ Detected Player Prop (by ${isPlayerPropByType ? 'betType' : 'description pattern'})`);
     console.log(`   Testing regex: ${overUnderPattern}`);
     const match = description.match(overUnderPattern);
     
@@ -96,6 +103,7 @@ function parseBetDetails(bet: any): {
       console.error(`   ❌ Regex NO MATCH for Player Prop`);
       console.error(`   Description: "${description}"`);
       console.error(`   Pattern: ${overUnderPattern}`);
+      console.error(`   This shouldn't happen if pattern check passed above!`);
     }
   }
   

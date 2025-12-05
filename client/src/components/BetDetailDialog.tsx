@@ -72,6 +72,40 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
 
   if (!bet) return null;
 
+  // Extract the team/selection being bet on for CS2/esports moneyline bets
+  // For CS2 bets, the team field often contains the full matchup (e.g., "Mouz vs Team Spirit")
+  // but we need to show which team they're actually betting on
+  const extractBettingSelection = (team: string, game: string | null | undefined, notes: string | null | undefined): { selection: string; isMatchupOnly: boolean } => {
+    // Check if team field is just the matchup (contains " vs ")
+    const isMatchup = team && team.includes(' vs ');
+    
+    if (isMatchup && game && team === game) {
+      // Try to extract from notes - CS2 bets have format in notes or description
+      // Look for pattern: "Winner (2 way) / TEAM_NAME" or similar
+      if (notes) {
+        const winnerMatch = notes.match(/Winner\s*\([^)]+\)\s*\/\s*([^/\n-]+?)(?:\s*[-+]\d|$)/i);
+        if (winnerMatch) {
+          return { selection: winnerMatch[1].trim(), isMatchupOnly: false };
+        }
+      }
+      
+      // Try to extract from team field if it has the full description
+      // Format: "Team1 vs Team2 / Match / Winner (2 way) / Team2 -231"
+      const fullDescMatch = team.match(/Winner\s*\([^)]+\)\s*\/\s*([^/\n-]+?)(?:\s*[-+]\d|$)/i);
+      if (fullDescMatch) {
+        return { selection: fullDescMatch[1].trim(), isMatchupOnly: false };
+      }
+      
+      // Can't determine which team - show matchup
+      return { selection: team, isMatchupOnly: true };
+    }
+    
+    // Not a matchup-only field, use as-is
+    return { selection: team, isMatchupOnly: false };
+  };
+
+  const { selection: bettingSelection, isMatchupOnly } = extractBettingSelection(bet.team, bet.game, bet.notes);
+
   const formatCurrency = (value: string | number | null | undefined) => {
     if (value === null || value === undefined) return "-";
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -203,7 +237,14 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
         <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 shrink-0">
           <div className="flex items-start justify-between gap-4 pr-8">
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-2xl truncate">{bet.team}</DialogTitle>
+              <DialogTitle className="text-2xl truncate">
+                {isMatchupOnly ? bet.game || bet.team : bettingSelection}
+              </DialogTitle>
+              {isMatchupOnly && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Betting on: {bettingSelection}
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-sm text-muted-foreground">{bet.betType}</span>
                 {bet.isFreePlay && (
@@ -324,6 +365,14 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Game</p>
                   <p className="text-base">{bet.game}</p>
+                </div>
+              )}
+
+              {/* Show betting selection clearly for moneyline bets */}
+              {(bet.betType === 'Straight' || bet.betType === 'Live') && bet.game && bettingSelection !== bet.game && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Betting On</p>
+                  <p className="text-base font-semibold">{bettingSelection}</p>
                 </div>
               )}
 

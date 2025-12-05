@@ -848,6 +848,19 @@ function extractTeamFromBet(parsed: ParsedBet): string {
     return `${parsed.legs.length}-Team Parlay`;
   }
   
+  // For live bets (especially CS2/esports), extract the team being bet on
+  // Format: "Team1 vs Team2 / Match / Winner (2 way) / Team2 -163"
+  // We want to extract "Team2" (the team after "Winner (2 way) /")
+  if (parsed.isLive && parsed.description) {
+    // Look for pattern: "Winner (2 way) / TEAM_NAME" or "Winner / TEAM_NAME"
+    const winnerMatch = parsed.description.match(/Winner\s*(?:\([^)]+\))?\s*\/\s*([^/\n-]+?)(?:\s*[-+]\d|$)/i);
+    if (winnerMatch) {
+      const teamName = winnerMatch[1].trim();
+      // Return the team name, not the full matchup
+      return teamName;
+    }
+  }
+  
   // For live bets or other types, use the game
   return parsed.game || parsed.description || 'Unknown';
 }

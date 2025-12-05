@@ -40,6 +40,16 @@ Preferred communication style: Simple, everyday language.
 - Instant scanability of metrics and bet status
 - Tabular number formatting for aligned numerical data
 - Clear visual hierarchy for performance data
+- Mobile-first responsive design
+
+**Mobile-Friendly Patterns**:
+- Dialogs use `overflow-hidden flex flex-col` with `overflow-y-auto` content area for proper scrolling
+- Responsive text: `text-xs sm:text-sm`, `text-sm sm:text-base`, `text-lg sm:text-xl`
+- Responsive padding: `px-3 sm:px-6`, `py-2 sm:py-4`
+- Responsive grids: `grid-cols-1 sm:grid-cols-2` for single column on mobile
+- Dialog widths: `w-[95vw] sm:w-full` for mobile-friendly dialogs
+- Fixed footers: Use `flex-shrink-0` on DialogFooter with flex-1 buttons on mobile
+- Dashboard has anchored bottom action bar on mobile (visible below md breakpoint)
 
 ### Backend Architecture
 

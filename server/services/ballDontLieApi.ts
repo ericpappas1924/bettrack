@@ -389,7 +389,14 @@ export function extractPlayerStat(
  * Map stat type to BALLDONTLIE field names
  */
 function mapStatType(statType: string): string {
-  const normalized = statType.toLowerCase().replace(/[^a-z]/g, '');
+  // Normalize: lowercase and remove non-alpha chars
+  let normalized = statType.toLowerCase().replace(/[^a-z]/g, '');
+  
+  // Strip common prefixes
+  normalized = normalized
+    .replace(/^total/, '')  // "total rebounds" → "rebounds"
+    .replace(/^player/, '') // "player points" → "points"
+    .replace(/^team/, '');  // "team rebounds" → "rebounds"
   
   const mapping: Record<string, string> = {
     'points': 'pts',

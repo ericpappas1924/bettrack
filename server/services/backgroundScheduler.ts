@@ -5,7 +5,7 @@
 
 import { autoSettleCompletedBets } from './liveStatTrackerV2';
 import { db } from '../storage';
-import { bets } from '@shared/schema';
+import { bets, users } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 
 let isSchedulerRunning = false;
@@ -39,20 +39,35 @@ async function runAutoSettlement() {
   try {
     console.log('\n🎯 [AUTO-SETTLE] Running scheduled check...');
     
-    // Get all active bets
-    const activeBets = await db.query.bets.findMany({
-      where: eq(bets.status, 'active')
-    });
-
-    console.log(`   Found ${activeBets.length} active bet(s)`);
-
-    if (activeBets.length === 0) {
-      console.log('   No active bets to check');
+    // Get all users with active bets
+    const allUsers = await db.query.users.findMany();
+    
+    if (allUsers.length === 0) {
+      console.log('   No users found');
       return;
     }
-
-    // Run auto-settlement
-    await autoSettleCompletedBets();
+    
+    console.log(`   Checking ${allUsers.length} user(s)...`);
+    
+    let totalSettled = 0;
+    
+    // Run auto-settlement for each user
+    for (const user of allUsers) {
+      try {
+        const userBets = await db.query.bets.findMany({
+          where: eq(bets.userId, user.id)
+        });
+        
+        const activeBets = userBets.filter(b => b.status === 'active');
+        
+        if (activeBets.length > 0) {
+          console.log(`   User ${user.id.substring(0, 8)}: ${activeBets.length} active bet(s)`);
+          await autoSettleCompletedBets(user.id);
+        }
+      } catch (error) {
+        console.error(`   ❌ Error for user ${user.id.substring(0, 8)}:`, error);
+      }
+    }
     
     console.log('✅ [AUTO-SETTLE] Scheduled check complete\n');
   } catch (error) {

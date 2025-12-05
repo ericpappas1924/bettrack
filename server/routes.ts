@@ -60,6 +60,14 @@ export async function registerRoutes(
           console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: status=${b.status}, hasGameTime=${!!b.gameStartTime}, hasSport=${!!b.sport}`);
           return false;
         }
+        
+        // CRITICAL: Skip parlays/teasers - they use dedicated parlay tracker
+        const betType = b.betType?.toLowerCase() || '';
+        if (betType.includes('parlay') || betType.includes('teaser')) {
+          console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: ${b.betType} (uses parlay tracker)`);
+          return false;
+        }
+        
         const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
         console.log(`   🎯 Bet ${b.id.substring(0, 8)}: gameStatus=${gameStatus}`);
         return gameStatus === GAME_STATUS.LIVE; // Only track games in progress

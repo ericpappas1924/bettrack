@@ -441,16 +441,16 @@ export default function SocialDashboard() {
       </Dialog>
 
       <Dialog open={!!detailBet} onOpenChange={() => setDetailBet(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />
               Bet Details
             </DialogTitle>
           </DialogHeader>
           {detailBet && (
-            <ScrollArea className="flex-1 -mx-6 px-6">
-              <div className="space-y-4 pr-4">
+            <div className="overflow-y-auto flex-1 -mx-6 px-6" style={{ maxHeight: 'calc(90vh - 160px)' }}>
+              <div className="space-y-4 pb-2">
                 <div className="flex items-center gap-3 pb-3 border-b">
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={detailBet.user.profileImageUrl || undefined} />
@@ -570,9 +570,9 @@ export default function SocialDashboard() {
                   )}
                 </div>
               </div>
-            </ScrollArea>
+            </div>
           )}
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setDetailBet(null)} data-testid="button-close-details">
               Close
             </Button>

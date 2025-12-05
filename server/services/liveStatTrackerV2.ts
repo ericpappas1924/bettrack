@@ -367,13 +367,17 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
     return null;
   }
   
+  // CRITICAL: Must have game time to determine if live/completed
+  if (!bet.gameStartTime) {
+    console.log(`⏭️  [TRACKER] Skipping bet ${betId}: no game time (cannot determine if live/completed)`);
+    return null;
+  }
+  
   // Check if game is live or completed (for final settlement)
-  if (bet.gameStartTime) {
-    const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-    if (gameStatus !== GAME_STATUS.LIVE && gameStatus !== GAME_STATUS.COMPLETED) {
-      console.log(`⏭️  [TRACKER] Skipping bet ${betId}: game is ${gameStatus}`);
-      return null;
-    }
+  const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+  if (gameStatus !== GAME_STATUS.LIVE && gameStatus !== GAME_STATUS.COMPLETED) {
+    console.log(`⏭️  [TRACKER] Skipping bet ${betId}: game is ${gameStatus}`);
+    return null;
   }
   
   console.log(`\n🎯 [TRACKER] Processing bet:`, {

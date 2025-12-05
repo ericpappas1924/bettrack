@@ -170,7 +170,7 @@ export function getSportFromText(text: string): Sport {
   // Basketball keywords
   const basketballKeywords = [
     'THREE', 'THREES', 'FREE THROW', 'DUNK', 'ASSIST', 'REBOUND', 'BLOCK',
-    'PRA', 'POINTS + REBOUNDS + ASSISTS'
+    'PRA', 'POINTS + REBOUNDS + ASSISTS', 'POINTS', 'POINT'
   ];
   
   // Baseball keywords
@@ -205,7 +205,28 @@ export function getSportFromText(text: string): Sport {
   
   if (nhlFullNames.some(team => upper.includes(team))) return SPORTS.NHL;
   
-  // Check NFL teams (most specific)
+  // Check NBA teams FIRST (before NFL) - more specific team names
+  const nbaTeams = [
+    // Eastern Conference - Atlantic
+    'CELTICS', 'NETS', 'KNICKS', '76ERS', 'SIXERS', 'RAPTORS',
+    // Eastern Conference - Central
+    'BUCKS', 'BULLS', 'CAVALIERS', 'CAVS', 'PISTONS', 'PACERS',
+    // Eastern Conference - Southeast
+    'HAWKS', 'HEAT', 'HORNETS', 'MAGIC', 'WIZARDS',
+    // Western Conference - Northwest
+    'NUGGETS', 'TIMBERWOLVES', 'THUNDER', 'TRAIL BLAZERS', 'BLAZERS', 'JAZZ',
+    // Western Conference - Pacific
+    'WARRIORS', 'CLIPPERS', 'LAKERS', 'SUNS', 'KINGS',
+    // Western Conference - Southwest
+    'MAVERICKS', 'ROCKETS', 'GRIZZLIES', 'PELICANS', 'SPURS',
+    // City names unique to NBA (helps catch "Denver Nuggets", "Indiana Pacers")
+    'DENVER', 'MILWAUKEE', 'CLEVELAND', 'INDIANA', 'ORLANDO', 'CHARLOTTE',
+    'MEMPHIS', 'SACRAMENTO', 'PORTLAND', 'PHOENIX', 'MINNESOTA',
+    'OKLAHOMA CITY', 'SAN ANTONIO', 'PHILADELPHIA'
+  ];
+  if (nbaTeams.some(team => upper.includes(team))) return SPORTS.NBA;
+  
+  // Check NFL teams (after NBA to avoid "New Orleans" conflict)
   const nflTeams = [
     'BILLS', 'DOLPHINS', 'PATRIOTS', 'JETS', // AFC East
     'RAVENS', 'BENGALS', 'BROWNS', 'STEELERS', // AFC North
@@ -221,37 +242,40 @@ export function getSportFromText(text: string): Sport {
   
   if (nflTeams.some(team => upper.includes(team))) return SPORTS.NFL;
   
+  // Check NCAAF teams (before football keywords to catch matchups without prop details)
+  const ncaafTeams = [
+    // Power 5 / Major programs
+    'OHIO STATE', 'MICHIGAN WOLVERINES', 'ALABAMA', 'GEORGIA BULLDOGS', 'LSU', 'CLEMSON',
+    'NOTRE DAME', 'UCLA', 'PENN STATE', 'OREGON DUCKS', 'FLORIDA GATORS',
+    'TEXAS LONGHORNS', 'OKLAHOMA SOONERS', 'AUBURN', 'TENNESSEE VOLUNTEERS', 'FLORIDA STATE',
+    'MIAMI HURRICANES', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
+    'SOUTH CAROLINA', 'NORTH CAROLINA', 'VIRGINIA TECH', 'VIRGINIA',
+    'BAYLOR', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
+    'WASHINGTON HUSKIES', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
+    'KENTUCKY', 'VANDERBILT', 'MISSISSIPPI', 'OLE MISS', 'MISS STATE',
+    'ARKANSAS', 'MISSOURI', 'TEXAS A&M', 'NC STATE', 'DUKE', 'WAKE FOREST',
+    'BOSTON COLLEGE', 'SYRACUSE', 'PITT', 'LOUISVILLE', 'RUTGERS',
+    'PURDUE', 'ILLINOIS', 'INDIANA',
+    'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO BUFFALOES', 'UTAH', 'BYU',
+    'UCF KNIGHTS', 'USC TROJANS',
+    // Group of 5 / FCS / Smaller programs + team codes
+    'JAMES MADISON', 'JMU', 'TROY', 'TRY', 'APP STATE', 'APPALACHIAN STATE', 'COASTAL CAROLINA',
+    'MARSHALL', 'LIBERTY', 'MEMPHIS', 'TULANE', 'ARMY', 'NAVY', 'AIR FORCE',
+    'BOISE STATE', 'SAN DIEGO STATE', 'FRESNO STATE', 'UNLV', 'NEVADA',
+    'WYOMING', 'NEW MEXICO', 'COLORADO STATE', 'UTAH STATE',
+    'NORTH TEXAS', 'UAB', 'UTSA', 'FAU', 'FIU', 'MIDDLE TENNESSEE', 'WKU',
+    'WESTERN KENTUCKY', 'SOUTHERN MISS', 'LOUISIANA', 'SOUTH ALABAMA',
+    'ARKANSAS STATE', 'TEXAS STATE', 'OLD DOMINION', 'GEORGIA STATE', 'GEORGIA SOUTHERN'
+  ];
+  
+  if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;
+  
   // Check for football (NFL or NCAAF based on context)
   if (footballKeywords.some(keyword => upper.includes(keyword))) {
     // Try to determine if it's college or pro
     if (upper.includes('COLLEGE') || upper.includes('NCAA')) return SPORTS.NCAAF;
     
-    // Check for common NCAAF teams (unique ones that don't conflict with NFL)
-    const ncaafTeams = [
-      // Power 5 / Major programs
-      'OHIO STATE', 'MICHIGAN WOLVERINES', 'ALABAMA', 'GEORGIA BULLDOGS', 'LSU', 'CLEMSON',
-      'NOTRE DAME', 'UCLA', 'PENN STATE', 'OREGON DUCKS', 'FLORIDA GATORS',
-      'TEXAS LONGHORNS', 'OKLAHOMA SOONERS', 'AUBURN', 'TENNESSEE VOLUNTEERS', 'FLORIDA STATE',
-      'MIAMI HURRICANES', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
-      'SOUTH CAROLINA', 'NORTH CAROLINA', 'VIRGINIA TECH', 'VIRGINIA',
-      'BAYLOR', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
-      'WASHINGTON HUSKIES', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
-      'KENTUCKY', 'VANDERBILT', 'MISSISSIPPI', 'OLE MISS', 'MISS STATE',
-      'ARKANSAS', 'MISSOURI', 'TEXAS A&M', 'NC STATE', 'DUKE', 'WAKE FOREST',
-      'BOSTON COLLEGE', 'SYRACUSE', 'PITT', 'LOUISVILLE', 'RUTGERS',
-      'PURDUE', 'ILLINOIS', 'INDIANA',
-      'NORTHWESTERN', 'MICHIGAN STATE', 'COLORADO BUFFALOES', 'UTAH', 'BYU',
-      'UCF KNIGHTS', 'USC TROJANS',
-      // Group of 5 / FCS / Smaller programs
-      'JAMES MADISON', 'TROY', 'APP STATE', 'APPALACHIAN STATE', 'COASTAL CAROLINA',
-      'MARSHALL', 'LIBERTY', 'MEMPHIS', 'TULANE', 'ARMY', 'NAVY', 'AIR FORCE',
-      'BOISE STATE', 'SAN DIEGO STATE', 'FRESNO STATE', 'UNLV', 'NEVADA',
-      'WYOMING', 'NEW MEXICO', 'COLORADO STATE', 'UTAH STATE',
-      'NORTH TEXAS', 'UAB', 'UTSA', 'FAU', 'FIU', 'MIDDLE TENNESSEE', 'WKU',
-      'WESTERN KENTUCKY', 'SOUTHERN MISS', 'LOUISIANA', 'SOUTH ALABAMA',
-      'ARKANSAS STATE', 'TEXAS STATE', 'OLD DOMINION', 'GEORGIA STATE', 'GEORGIA SOUTHERN'
-    ];
-    
+    // Check NCAAF teams again (already checked above, but double-check with keywords)
     if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;
     
     return SPORTS.NFL; // Default to NFL for football
@@ -274,26 +298,7 @@ export function getSportFromText(text: string): Sport {
   const nflSuffixes = ['CHIEFS', 'COWBOYS', 'LIONS', 'PACKERS', 'BEARS', '49ERS'];
   if (nflSuffixes.some(suffix => upper.includes(suffix))) return SPORTS.NFL;
   
-  // NBA teams (comprehensive list - all 30 teams)
-  const nbaTeams = [
-    // Eastern Conference - Atlantic
-    'CELTICS', 'NETS', 'KNICKS', '76ERS', 'SIXERS', 'RAPTORS',
-    // Eastern Conference - Central
-    'BUCKS', 'BULLS', 'CAVALIERS', 'CAVS', 'PISTONS', 'PACERS',
-    // Eastern Conference - Southeast
-    'HAWKS', 'HEAT', 'HORNETS', 'MAGIC', 'WIZARDS',
-    // Western Conference - Northwest
-    'NUGGETS', 'TIMBERWOLVES', 'THUNDER', 'TRAIL BLAZERS', 'BLAZERS', 'JAZZ',
-    // Western Conference - Pacific
-    'WARRIORS', 'CLIPPERS', 'LAKERS', 'SUNS', 'KINGS',
-    // Western Conference - Southwest
-    'MAVERICKS', 'ROCKETS', 'GRIZZLIES', 'PELICANS', 'SPURS',
-    // City names unique to NBA (helps catch "Denver Nuggets", "Indiana Pacers")
-    'DENVER', 'MILWAUKEE', 'CLEVELAND', 'INDIANA', 'ORLANDO', 'CHARLOTTE',
-    'MEMPHIS', 'SACRAMENTO', 'PORTLAND', 'PHOENIX', 'MINNESOTA',
-    'OKLAHOMA CITY', 'SAN ANTONIO', 'PHILADELPHIA'
-  ];
-  if (nbaTeams.some(team => upper.includes(team))) return SPORTS.NBA;
+  // NBA teams already checked above (moved before NFL to avoid conflicts)
   
   // 6. Position indicators
   if (upper.match(/\b(QB|RB|WR|TE|DE|LB|CB|S)\b/)) return SPORTS.NFL;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { MetricCard } from "@/components/MetricCard";
@@ -60,23 +60,40 @@ export default function Dashboard() {
     queryKey: ["/api/bets"],
   });
 
-  // Fetch live stats for ALL active bets that are currently live
+  // Compute refetch interval: only refetch if there are live bets
+  const refetchInterval = useMemo(() => {
+    const hasLiveBets = bets.some((bet) => {
+      if (bet.status !== "active" || !bet.gameStartTime) return false;
+      const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+      return gameStatus === 'live';
+    });
+    return hasLiveBets ? 60000 : false; // Refetch every 60s for live, stop for completed only
+  }, [bets]);
+
+  // Fetch live stats for ALL active bets that are currently live or completed
   const { data: liveStats = [], refetch: refetchLiveStats, isLoading: isLoadingLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
-    refetchInterval: 60000, // Refetch every 60 seconds
+    refetchInterval,
     enabled: (() => {
+      // Enable for both LIVE and COMPLETED games (to show final stats)
+      const trackableBets = bets.filter((bet) => {
+        if (bet.status !== "active" || !bet.gameStartTime) return false;
+        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+        return gameStatus === 'live' || gameStatus === 'completed';
+      });
+      
       const liveBets = bets.filter((bet) => {
         if (bet.status !== "active" || !bet.gameStartTime) return false;
         const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
         return gameStatus === 'live';
       });
       
-      if (liveBets.length > 0) {
-        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${liveBets.length} bet(s)`);
-        console.log(`   Live bet IDs:`, liveBets.map(b => b.id.substring(0, 8)));
+      if (trackableBets.length > 0) {
+        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${trackableBets.length} bet(s) (${liveBets.length} live, ${trackableBets.length - liveBets.length} completed)`);
+        console.log(`   Trackable bet IDs:`, trackableBets.map(b => b.id.substring(0, 8)));
       }
       
-      return liveBets.length > 0;
+      return trackableBets.length > 0;
     })(),
   });
 

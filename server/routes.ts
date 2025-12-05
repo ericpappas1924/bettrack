@@ -70,7 +70,8 @@ export async function registerRoutes(
         
         const gameStatus = getGameStatus(b.gameStartTime, b.sport as Sport);
         console.log(`   🎯 Bet ${b.id.substring(0, 8)}: gameStatus=${gameStatus}`);
-        return gameStatus === GAME_STATUS.LIVE; // Only track games in progress
+        // Track both LIVE and COMPLETED games (to show final stats)
+        return gameStatus === GAME_STATUS.LIVE || gameStatus === GAME_STATUS.COMPLETED;
       });
       
       console.log(`📊 [API] Tracking ${activeBets.length} live bet(s) out of ${totalActiveBets} active`);

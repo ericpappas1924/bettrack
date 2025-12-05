@@ -1,7 +1,7 @@
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-serverless";
-import { eq, and, ne, desc } from "drizzle-orm";
-import { bets, users, type Bet, type InsertBet, type UpdateBet, type User, type UpsertUser } from "@shared/schema";
+import { eq, and, ne, desc, isNotNull, sql } from "drizzle-orm";
+import { bets, users, potdCategories, type Bet, type InsertBet, type UpdateBet, type User, type UpsertUser, type PotdCategory, type InsertPotdCategory } from "@shared/schema";
 import ws from "ws";
 
 export type BetWithUser = Bet & { user: User };
@@ -20,7 +20,10 @@ export type LeaderboardEntry = {
 neonConfig.webSocketConstructor = ws;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-export const db = drizzle({ client: pool, schema: { bets, users } });
+export const db = drizzle({ client: pool, schema: { bets, users, potdCategories } });
+
+// Type for POTD bets with user info
+export type PotdBetWithUser = Bet & { user: User; category: PotdCategory };
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -41,6 +44,16 @@ export interface IStorage {
   getLeaderboard(): Promise<LeaderboardEntry[]>;
   getUserPublicBets(userId: string): Promise<BetWithUser[]>;
   getUserActiveBets(userId: string): Promise<BetWithUser[]>;
+  
+  // Play of the Day features
+  getPotdCategories(): Promise<PotdCategory[]>;
+  getPotdCategory(id: string): Promise<PotdCategory | undefined>;
+  createPotdCategory(category: InsertPotdCategory): Promise<PotdCategory>;
+  updatePotdCategory(id: string, updates: Partial<PotdCategory>): Promise<PotdCategory | undefined>;
+  getPotdBets(categoryId?: string): Promise<BetWithUser[]>;
+  markBetAsPotd(betId: string, categoryId: string, userId: string): Promise<Bet | undefined>;
+  updatePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined>;
+  seedPotdCategories(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {

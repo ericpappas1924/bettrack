@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, index, jsonb, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -23,6 +23,20 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Play of the Day Categories table
+export const potdCategories = pgTable("potd_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  wins: integer("wins").notNull().default(0),
+  losses: integer("losses").notNull().default(0),
+  pushes: integer("pushes").notNull().default(0),
+  units: real("units").notNull().default(0),
+  streak: integer("streak").notNull().default(0), // positive = winning streak, negative = losing streak
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 // Bets table - linked to user
@@ -58,10 +72,17 @@ export const bets = pgTable("bets", {
   market: text("market"), // e.g., "Points", "Rebounds", "Assists", "PRA"
   overUnder: text("over_under"), // "Over" or "Under"
   line: text("line"), // e.g., "11.5", "5.5"
+  // Play of the Day fields
+  playOfDayCategory: varchar("play_of_day_category").references(() => potdCategories.id),
+  markedAsPotdAt: timestamp("marked_as_potd_at"),
+  markedAsPotdBy: varchar("marked_as_potd_by").references(() => users.id),
 });
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+export type PotdCategory = typeof potdCategories.$inferSelect;
+export type InsertPotdCategory = typeof potdCategories.$inferInsert;
 
 export const insertBetSchema = createInsertSchema(bets).omit({
   id: true,
@@ -105,6 +126,10 @@ export const updateBetSchema = z.object({
   market: z.string().nullable().optional(),
   overUnder: z.enum(["Over", "Under"]).nullable().optional(),
   line: z.string().nullable().optional(),
+  // Play of the Day fields
+  playOfDayCategory: z.string().nullable().optional(),
+  markedAsPotdAt: z.date().nullable().optional(),
+  markedAsPotdBy: z.string().nullable().optional(),
 });
 
 export type InsertBet = z.infer<typeof insertBetSchema>;

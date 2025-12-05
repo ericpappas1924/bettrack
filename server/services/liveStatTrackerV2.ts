@@ -669,16 +669,28 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
   }
   
   // Check if game is live or completed (for final settlement)
+  // For NFL, we'll check actual API status, so be more lenient with time-based check
   const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
+  const gameStartTime = bet.gameStartTime ? new Date(bet.gameStartTime) : null;
+  const now = new Date();
+  const hasStarted = gameStartTime && now >= gameStartTime;
+  
   console.log(`⏰ [TRACKER] Game Status Check:`, {
     gameStartTime: bet.gameStartTime,
     sport: bet.sport,
     calculatedStatus: gameStatus,
     isLive: gameStatus === GAME_STATUS.LIVE,
-    isCompleted: gameStatus === GAME_STATUS.COMPLETED
+    isCompleted: gameStatus === GAME_STATUS.COMPLETED,
+    hasStarted,
+    hoursSinceStart: gameStartTime ? ((now.getTime() - gameStartTime.getTime()) / (1000 * 60 * 60)).toFixed(2) : 'N/A'
   });
   
-  if (gameStatus !== GAME_STATUS.LIVE && gameStatus !== GAME_STATUS.COMPLETED) {
+  // For NFL: If game has started, always try to check API (even if time estimate says completed)
+  // The API will tell us the real status
+  if (bet.sport === 'NFL' && hasStarted) {
+    console.log(`🏈 [TRACKER] NFL game has started - will check actual API status (ignoring time estimate)`);
+    // Continue to tracking - API will provide real status
+  } else if (gameStatus !== GAME_STATUS.LIVE && gameStatus !== GAME_STATUS.COMPLETED) {
     console.log(`⏭️  [TRACKER] Skipping bet ${betId}: game is ${gameStatus}`);
     return null;
   }

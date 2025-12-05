@@ -363,9 +363,15 @@ export const GAME_STATUS = {
 export type GameStatus = typeof GAME_STATUS[keyof typeof GAME_STATUS];
 
 // Typical game durations in hours (including warmup, halftime, overtime buffer)
+// NOTE: These are conservative estimates. Actual games can run longer due to:
+// - Overtime periods
+// - Weather delays
+// - Extended timeouts
+// - Injury delays
+// The API will provide actual game status, but this is used for initial filtering
 export const SPORT_DURATIONS: Record<Sport, number> = {
-  [SPORTS.NFL]: 3.5,        // ~3.5 hours (including halftime and timeouts)
-  [SPORTS.NCAAF]: 3.5,      // College football similar to NFL
+  [SPORTS.NFL]: 5.0,        // ~5 hours (conservative - includes OT, delays, etc.)
+  [SPORTS.NCAAF]: 5.0,      // College football similar to NFL (can have long games)
   [SPORTS.NBA]: 2.5,        // ~2.5 hours (including timeouts and halftime)
   [SPORTS.NCAAB]: 2.5,      // College basketball similar to NBA
   [SPORTS.WNCAAB]: 2.5,     // Women's college basketball similar to men's

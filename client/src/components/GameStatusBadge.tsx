@@ -10,11 +10,36 @@ interface GameStatusBadgeProps {
   compact?: boolean;
   betType?: string;
   notes?: string | null;
+  betStatus?: string; // 'active' | 'settled' | etc.
 }
 
-export function GameStatusBadge({ gameStartTime, sport, compact = false, betType, notes }: GameStatusBadgeProps) {
+export function GameStatusBadge({ gameStartTime, sport, compact = false, betType, notes, betStatus }: GameStatusBadgeProps) {
   if (!gameStartTime) {
     return null;
+  }
+
+  // If bet is settled, always show FINAL (regardless of time calculation)
+  if (betStatus === 'settled') {
+    const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
+    if (compact) {
+      return (
+        <Badge variant="secondary" className="gap-1 text-xs">
+          <CheckCircle2 className="h-3 w-3" />
+          FINAL
+        </Badge>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <Badge variant="secondary" className="gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          FINAL
+        </Badge>
+        <span className="text-sm text-muted-foreground">
+          Ended {format(startTime, "MMM dd")}
+        </span>
+      </div>
+    );
   }
 
   // For parlays/teasers, determine status from leg completion

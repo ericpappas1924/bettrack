@@ -310,11 +310,12 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               {bet.gameStartTime && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Game Status</p>
-                  <GameStatusBadge 
-                    gameStartTime={bet.gameStartTime} 
+                  <GameStatusBadge
+                    gameStartTime={bet.gameStartTime}
                     sport={bet.sport as Sport}
                     betType={bet.betType}
                     notes={bet.notes}
+                    betStatus={bet.status}
                   />
                 </div>
               )}

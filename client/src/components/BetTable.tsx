@@ -153,6 +153,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           compact 
                           betType={bet.betType}
                           notes={bet.notes}
+                          betStatus={bet.status}
                         />
                       )}
                       {liveStat && liveStat.isLive && (
@@ -404,6 +405,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           compact 
                           betType={bet.betType}
                           notes={bet.notes}
+                          betStatus={bet.status}
                         />
                       )}
                     </div>

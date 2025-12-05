@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Activity, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 export interface LiveStat {
@@ -198,29 +197,20 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
 
   if (compact) {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-2">
-              <Badge 
-                variant={variant}
-                className={`gap-1 ${bgColor}`}
-              >
-                {icon}
-                {getBadgeText()}
-              </Badge>
-              {(isLive || isComplete) && (
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {timeRemaining}
-                </span>
-              )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {tooltipContent}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <div className="flex items-center gap-2">
+        <Badge 
+          variant={variant}
+          className={`gap-1 ${bgColor}`}
+        >
+          {icon}
+          {getBadgeText()}
+        </Badge>
+        {(isLive || isComplete) && (
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {timeRemaining}
+          </span>
+        )}
+      </div>
     );
   }
 

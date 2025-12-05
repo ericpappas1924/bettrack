@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
-import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
+import type { LiveStat } from "./LiveStatsBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import type { Sport } from "@shared/betTypes";
@@ -155,10 +155,37 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           notes={bet.notes}
                         />
                       )}
-                      {liveStat && <LiveStatsBadge liveStat={liveStat} compact />}
+                      {liveStat && liveStat.isLive && (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-xs">
+                            LIVE
+                          </Badge>
+                          {liveStat.betType === 'Player Prop' && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined && (
+                            <span className="text-xs font-medium tabular-nums">
+                              {Number.isInteger(liveStat.currentValue) 
+                                ? liveStat.currentValue.toString() 
+                                : liveStat.currentValue.toFixed(1)} / {Number.isInteger(liveStat.targetValue) 
+                                  ? liveStat.targetValue.toString() 
+                                  : liveStat.targetValue.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <p className="font-medium truncate">{bet.team}</p>
                     <p className="text-xs text-muted-foreground">{bet.betType}</p>
+                    {liveStat && liveStat.betType === 'Player Prop' && liveStat.progress !== undefined && (
+                      <div className="w-full bg-secondary rounded-full h-1.5 mt-1">
+                        <div 
+                          className={`h-1.5 rounded-full transition-all ${
+                            liveStat.isComplete 
+                              ? (liveStat.isWinning ? 'bg-green-500' : 'bg-red-500')
+                              : (liveStat.isWinning ? 'bg-green-500' : 'bg-amber-500')
+                          }`}
+                          style={{ width: `${Math.min(100, liveStat.progress || 0)}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="flex items-center gap-1">
@@ -226,11 +253,40 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     <div className="text-center">
                       {bet.status === "active" ? (
                         <>
-                          <p className="text-xs text-muted-foreground">Win %</p>
-                          <LiveProbabilityBadge
-                            baselineProbability={baselineProbability}
-                            liveProbability={liveProbability}
-                          />
+                          <p className="text-xs text-muted-foreground">Live Progress</p>
+                          {liveStat ? (
+                            <div className="space-y-1">
+                              {liveStat.betType === 'Player Prop' && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined ? (
+                                <>
+                                  <p className="text-xs font-medium tabular-nums">
+                                    {Number.isInteger(liveStat.currentValue) 
+                                      ? liveStat.currentValue.toString() 
+                                      : liveStat.currentValue.toFixed(1)} / {Number.isInteger(liveStat.targetValue) 
+                                        ? liveStat.targetValue.toString() 
+                                        : liveStat.targetValue.toFixed(1)}
+                                  </p>
+                                  {liveStat.progress !== undefined && (
+                                    <div className="w-full bg-secondary rounded-full h-1.5">
+                                      <div 
+                                        className={`h-1.5 rounded-full transition-all ${
+                                          liveStat.isComplete 
+                                            ? (liveStat.isWinning ? 'bg-green-500' : 'bg-red-500')
+                                            : (liveStat.isWinning ? 'bg-green-500' : 'bg-amber-500')
+                                        }`}
+                                        style={{ width: `${Math.min(100, liveStat.progress || 0)}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                liveStat.currentScore && (
+                                  <p className="text-xs font-medium">{liveStat.currentScore}</p>
+                                )
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
                         </>
                       ) : (
                         <>
@@ -307,7 +363,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
               <TableHead>Team/Player</TableHead>
               <TableHead className="w-24 text-right">Odds</TableHead>
               <TableHead className="w-24 text-right">Stake</TableHead>
-              <TableHead className="w-28 text-center">Win % Change</TableHead>
+              <TableHead className="w-32">Live Progress</TableHead>
               <TableHead className="w-28 text-right">Est. W/L</TableHead>
               <TableHead className="w-20 text-right">CLV</TableHead>
               <TableHead className="w-24">Status</TableHead>
@@ -356,11 +412,6 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     <div>
                       <p className="font-medium">{bet.team}</p>
                       <p className="text-xs text-muted-foreground">{bet.betType}</p>
-                      {liveStat && (
-                        <div className="mt-1">
-                          <LiveStatsBadge liveStat={liveStat} compact />
-                        </div>
-                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-sm">
@@ -376,12 +427,54 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                   <TableCell className="text-right tabular-nums text-sm">
                     {formatCurrency(bet.stake)}
                   </TableCell>
-                  <TableCell className="text-center">
-                    {bet.status === "active" ? (
-                      <LiveProbabilityBadge
-                        baselineProbability={baselineProbability}
-                        liveProbability={liveProbability}
-                      />
+                  <TableCell>
+                    {liveStat ? (
+                      <div className="space-y-1">
+                        {liveStat.betType === 'Player Prop' && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined ? (
+                          <>
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="text-muted-foreground">
+                                {liveStat.playerName || 'Player'}
+                              </span>
+                              <span className="font-medium tabular-nums">
+                                {Number.isInteger(liveStat.currentValue) 
+                                  ? liveStat.currentValue.toString() 
+                                  : liveStat.currentValue.toFixed(1)} / {Number.isInteger(liveStat.targetValue) 
+                                    ? liveStat.targetValue.toString() 
+                                    : liveStat.targetValue.toFixed(1)}
+                              </span>
+                            </div>
+                            {liveStat.progress !== undefined && (
+                              <div className="w-full bg-secondary rounded-full h-1.5">
+                                <div 
+                                  className={`h-1.5 rounded-full transition-all ${
+                                    liveStat.isComplete 
+                                      ? (liveStat.isWinning ? 'bg-green-500' : 'bg-red-500')
+                                      : (liveStat.isWinning ? 'bg-green-500' : 'bg-amber-500')
+                                  }`}
+                                  style={{ width: `${Math.min(100, liveStat.progress || 0)}%` }}
+                                />
+                              </div>
+                            )}
+                            {liveStat.isLive && (
+                              <span className="text-xs text-muted-foreground">
+                                {liveStat.gameStatus || 'Live'}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {liveStat.currentScore && (
+                              <div className="text-xs font-medium">{liveStat.currentScore}</div>
+                            )}
+                            {liveStat.isLive && (
+                              <span className="text-xs text-muted-foreground">
+                                {liveStat.gameStatus || 'Live'}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>
                     )}

@@ -17,7 +17,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight } from "lucide-react";
+import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Minus } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -37,6 +38,65 @@ type LeaderboardEntry = {
   avgClv: number | null;
 };
 
+// Parse parlay legs from notes field
+interface ParsedLeg {
+  dateTime: string;
+  sport: string;
+  details: string;
+  status?: 'won' | 'lost' | 'pending';
+  score?: string;
+}
+
+function parseParlayLegs(notes: string | null | undefined): ParsedLeg[] {
+  if (!notes) return [];
+  
+  const legs: ParsedLeg[] = [];
+  const lines = notes.split('\n').filter((l: string) => {
+    const trimmed = l.trim();
+    return trimmed && 
+           !trimmed.startsWith('Category:') && 
+           !trimmed.startsWith('League:') &&
+           !trimmed.startsWith('Game ID:') &&
+           !trimmed.startsWith('Auto-settled:') &&
+           !trimmed.startsWith('Tailed from');
+  });
+  
+  for (const legLine of lines) {
+    // Pattern: [DATE TIME] [SPORT] BET DETAILS [Status] (Score: X-Y)
+    const legMatch = legLine.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*(.+)/);
+    if (!legMatch) continue;
+    
+    const dateTime = legMatch[1];
+    const sport = legMatch[2];
+    let details = legMatch[3].trim();
+    
+    // Extract status if present
+    let status: 'won' | 'lost' | 'pending' | undefined;
+    if (details.includes('[Won]')) {
+      status = 'won';
+      details = details.replace('[Won]', '').trim();
+    } else if (details.includes('[Lost]')) {
+      status = 'lost';
+      details = details.replace('[Lost]', '').trim();
+    } else if (details.includes('[Pending]')) {
+      status = 'pending';
+      details = details.replace('[Pending]', '').trim();
+    }
+    
+    // Extract score if present
+    let score: string | undefined;
+    const scoreMatch = details.match(/\(Score:\s*([^)]+)\)/);
+    if (scoreMatch) {
+      score = scoreMatch[1];
+      details = details.replace(scoreMatch[0], '').trim();
+    }
+    
+    legs.push({ dateTime, sport, details, status, score });
+  }
+  
+  return legs;
+}
+
 export default function SocialDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -44,6 +104,7 @@ export default function SocialDashboard() {
   const [tailDialogOpen, setTailDialogOpen] = useState(false);
   const [betToTail, setBetToTail] = useState<BetWithUser | null>(null);
   const [tailStake, setTailStake] = useState("");
+  const [detailBet, setDetailBet] = useState<BetWithUser | null>(null);
 
   const { data: feed = [], isLoading: feedLoading } = useQuery<BetWithUser[]>({
     queryKey: ["/api/social/feed"],
@@ -119,6 +180,10 @@ export default function SocialDashboard() {
     if (betToTail) {
       tailMutation.mutate({ betId: betToTail.id, stake: tailStake || undefined });
     }
+  };
+
+  const handleViewDetails = (bet: BetWithUser) => {
+    setDetailBet(bet);
   };
 
   const activeFeedBets = feed.filter(bet => bet.status === 'active');
@@ -218,6 +283,7 @@ export default function SocialDashboard() {
                     bet={bet}
                     currentUserId={user?.id}
                     onTail={handleTailClick}
+                    onViewDetails={handleViewDetails}
                     formatOdds={formatOdds}
                     getUserInitials={getUserInitials}
                     getUserDisplayName={getUserDisplayName}
@@ -255,6 +321,7 @@ export default function SocialDashboard() {
                     currentUserId={user?.id}
                     onTail={handleTailClick}
                     onUserClick={setSelectedUser}
+                    onViewDetails={handleViewDetails}
                     formatOdds={formatOdds}
                     getUserInitials={getUserInitials}
                     getUserDisplayName={getUserDisplayName}
@@ -372,6 +439,158 @@ export default function SocialDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!detailBet} onOpenChange={() => setDetailBet(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Bet Details
+            </DialogTitle>
+          </DialogHeader>
+          {detailBet && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={detailBet.user.profileImageUrl || undefined} />
+                  <AvatarFallback>{getUserInitials(detailBet.user)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{getUserDisplayName(detailBet.user)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {detailBet.createdAt && new Date(detailBet.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{detailBet.sport}</Badge>
+                    <Badge variant="secondary">{detailBet.betType}</Badge>
+                    {detailBet.status !== 'active' && (
+                      <Badge variant={detailBet.result === 'won' ? 'default' : detailBet.result === 'lost' ? 'destructive' : 'secondary'}>
+                        {detailBet.result || detailBet.status}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-lg">{formatOdds(detailBet.openingOdds)}</span>
+                </div>
+
+                <p className="font-semibold text-lg">{detailBet.team}</p>
+                
+                {detailBet.game && (
+                  <p className="text-muted-foreground">{detailBet.game}</p>
+                )}
+
+                {detailBet.player && detailBet.market && (
+                  <p className="text-muted-foreground">
+                    {detailBet.player} {detailBet.overUnder} {detailBet.line} {detailBet.market}
+                  </p>
+                )}
+              </div>
+
+              {(detailBet.betType === 'Parlay' || detailBet.betType === 'Teaser') && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <Target className="h-4 w-4" />
+                    Legs ({parseParlayLegs(detailBet.notes).length})
+                  </h4>
+                  <ScrollArea className="max-h-64">
+                    <div className="space-y-2">
+                      {parseParlayLegs(detailBet.notes).length > 0 ? (
+                        parseParlayLegs(detailBet.notes).map((leg, idx) => (
+                          <Card key={idx} className="p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Badge variant="outline" className="text-xs">{leg.sport}</Badge>
+                                  {leg.status && (
+                                    <span className={`flex items-center gap-1 text-xs font-medium ${
+                                      leg.status === 'won' ? 'text-green-600 dark:text-green-400' : 
+                                      leg.status === 'lost' ? 'text-red-600 dark:text-red-400' : 
+                                      'text-muted-foreground'
+                                    }`}>
+                                      {leg.status === 'won' && <Check className="h-3 w-3" />}
+                                      {leg.status === 'lost' && <X className="h-3 w-3" />}
+                                      {leg.status === 'pending' && <Clock className="h-3 w-3" />}
+                                      {leg.status.charAt(0).toUpperCase() + leg.status.slice(1)}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="font-medium text-sm">{leg.details}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    {leg.dateTime}
+                                  </span>
+                                  {leg.score && (
+                                    <span className="text-xs text-muted-foreground">
+                                      Score: {leg.score}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No leg details available
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t">
+                <div>
+                  <p className="text-sm text-muted-foreground">Stake</p>
+                  <p className="font-semibold">${detailBet.stake}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Potential Win</p>
+                  <p className="font-semibold">${detailBet.potentialWin || '—'}</p>
+                </div>
+                {detailBet.clv && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">CLV</p>
+                    <p className={`font-semibold ${parseFloat(detailBet.clv) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {parseFloat(detailBet.clv) >= 0 ? '+' : ''}{detailBet.clv}%
+                    </p>
+                  </div>
+                )}
+                {detailBet.profit && detailBet.status === 'settled' && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Profit</p>
+                    <p className={`font-semibold ${parseFloat(detailBet.profit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {parseFloat(detailBet.profit) >= 0 ? '+' : ''}${detailBet.profit}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDetailBet(null)} data-testid="button-close-details">
+              Close
+            </Button>
+            {detailBet && detailBet.status === 'active' && detailBet.userId !== user?.id && (
+              <Button 
+                onClick={() => {
+                  setDetailBet(null);
+                  handleTailClick(detailBet);
+                }}
+                data-testid="button-tail-from-details"
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Tail This Bet
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -381,6 +600,7 @@ function BetCard({
   currentUserId,
   onTail,
   onUserClick,
+  onViewDetails,
   formatOdds,
   getUserInitials,
   getUserDisplayName,
@@ -390,6 +610,7 @@ function BetCard({
   currentUserId?: string;
   onTail: (bet: BetWithUser) => void;
   onUserClick?: (user: UserType) => void;
+  onViewDetails?: (bet: BetWithUser) => void;
   formatOdds: (odds: string) => string;
   getUserInitials: (u: UserType) => string;
   getUserDisplayName: (u: UserType) => string;
@@ -397,14 +618,22 @@ function BetCard({
 }) {
   const isOwnBet = bet.userId === currentUserId;
   const isActive = bet.status === 'active';
+  const isParlay = bet.betType === 'Parlay' || bet.betType === 'Teaser';
 
   return (
-    <Card data-testid={`bet-card-${bet.id}`}>
+    <Card 
+      className={onViewDetails ? "hover-elevate cursor-pointer" : ""}
+      onClick={() => onViewDetails?.(bet)}
+      data-testid={`bet-card-${bet.id}`}
+    >
       <CardContent className="p-4 space-y-3">
         {showUser && (
           <div
             className={`flex items-center gap-2 ${onUserClick ? 'cursor-pointer hover:opacity-80' : ''}`}
-            onClick={() => onUserClick?.(bet.user)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUserClick?.(bet.user);
+            }}
           >
             <Avatar className="h-8 w-8">
               <AvatarImage src={bet.user.profileImageUrl || undefined} />
@@ -420,6 +649,12 @@ function BetCard({
             <div className="flex items-center gap-2">
               <Badge variant="outline">{bet.sport}</Badge>
               <Badge variant="secondary">{bet.betType}</Badge>
+              {isParlay && (
+                <Badge variant="outline" className="text-xs">
+                  <Eye className="h-3 w-3 mr-1" />
+                  View Legs
+                </Badge>
+              )}
             </div>
             <span className="font-mono font-semibold text-sm">{formatOdds(bet.openingOdds)}</span>
           </div>
@@ -455,7 +690,10 @@ function BetCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onTail(bet)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTail(bet);
+              }}
               data-testid={`button-tail-${bet.id}`}
             >
               <Copy className="h-3 w-3 mr-1" />

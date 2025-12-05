@@ -10,7 +10,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { parseBetPaste, convertToAppBet, type ParsedBet, type ParseResult } from "@/lib/betParser";
 import { Upload, Check, AlertCircle, AlertTriangle } from "lucide-react";
@@ -71,7 +70,7 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-xl sm:max-w-3xl max-h-[90vh] sm:max-h-[85vh] w-[95vw] sm:w-full flex flex-col p-3 sm:p-6">
+      <DialogContent className="max-w-xl sm:max-w-3xl max-h-[90vh] sm:max-h-[85vh] w-[95vw] sm:w-full overflow-hidden flex flex-col p-3 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-base sm:text-lg">
             {step === 'paste' ? 'Import Bets' : `Preview Import (${parsedBets.length} bets)`}
@@ -134,7 +133,7 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
               </Alert>
             )}
 
-            <ScrollArea className="flex-1 max-h-[400px]">
+            <div className="flex-1 overflow-y-auto max-h-[50vh] sm:max-h-[400px]">
               <div className="space-y-2 pr-2 sm:pr-4">
                 {parsedBets.map((bet, index) => (
                   <div 
@@ -200,7 +199,7 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </div>
         )}
 

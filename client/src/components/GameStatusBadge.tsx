@@ -23,7 +23,7 @@ export function GameStatusBadge({ gameStartTime, sport, compact = false, betType
     const startTime = typeof gameStartTime === 'string' ? new Date(gameStartTime) : gameStartTime;
     if (compact) {
       return (
-        <Badge variant="secondary" className="gap-1 text-xs">
+        <Badge variant="secondary" className="gap-1 text-xs w-fit whitespace-nowrap">
           <CheckCircle2 className="h-3 w-3" />
           FINAL
         </Badge>
@@ -182,7 +182,7 @@ export function GameStatusBadge({ gameStartTime, sport, compact = false, betType
           <TooltipTrigger asChild>
             <Badge 
               variant={variant}
-              className={`gap-1 text-xs ${bgColor}`}
+              className={`gap-1 text-xs w-fit whitespace-nowrap ${bgColor}`}
             >
               {icon}
               {label}

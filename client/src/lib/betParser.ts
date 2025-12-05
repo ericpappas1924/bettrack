@@ -492,7 +492,8 @@ export function parseBetPaste(rawText: string): ParseResult {
       let idAndType = '';
       
       const timePattern = /^(\d{2}:\d{2}\s+(?:AM|PM))/;
-      for (let i = 1; i < Math.min(3, lines.length); i++) {
+      // Check more lines for time pattern (up to 5 lines) to handle extra blank lines
+      for (let i = 1; i < Math.min(6, lines.length); i++) {
         const timeMatch = lines[i].match(timePattern);
         if (timeMatch) {
           timeStr = timeMatch[1];

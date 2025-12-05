@@ -22,16 +22,19 @@ function Router() {
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+
   return (
     <Switch>
-      {!isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={Dashboard} />
-          <Route path="/social" component={SocialDashboard} />
-        </>
-      )}
+      <Route path="/" component={Dashboard} />
+      <Route path="/social" component={SocialDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -233,20 +233,20 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] sm:max-h-[85vh] w-[95vw] sm:w-full flex flex-col gap-0 p-0">
-        <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 shrink-0">
-          <div className="flex items-start justify-between gap-4 pr-8">
+      <DialogContent className="max-w-3xl max-h-[85vh] sm:max-h-[85vh] w-[95vw] sm:w-full flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4 shrink-0">
+          <div className="flex items-start justify-between gap-2 sm:gap-4 pr-8">
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-2xl truncate">
+              <DialogTitle className="text-lg sm:text-2xl truncate">
                 {isMatchupOnly ? bet.game || bet.team : bettingSelection}
               </DialogTitle>
               {isMatchupOnly && (
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                   Betting on: {bettingSelection}
                 </p>
               )}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-sm text-muted-foreground">{bet.betType}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">{bet.betType}</span>
                 {bet.isFreePlay && (
                   <Badge className="bg-green-600 text-white text-xs">FREE PLAY</Badge>
                 )}
@@ -256,31 +256,31 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 px-4 sm:px-6 overflow-y-auto flex-1">
+        <div className="space-y-3 sm:space-y-4 px-3 sm:px-6 overflow-y-auto flex-1 pb-2">
           {bet.status === "active" && (
             <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0">
-                <CardTitle className="text-lg">Live Performance</CardTitle>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0 px-3 sm:px-6">
+                <CardTitle className="text-base sm:text-lg">Live Performance</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-3 sm:gap-6">
+              <CardContent className="px-3 sm:px-6">
+                <div className="grid grid-cols-3 gap-2 sm:gap-6">
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Win % Change</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Win % Change</p>
                     <LiveProbabilityBadge
                       baselineProbability={baselineProbability}
                       liveProbability={liveProbability}
                     />
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Current Win %</p>
-                    <p className="text-2xl font-bold tabular-nums">
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Current Win %</p>
+                    <p className="text-lg sm:text-2xl font-bold tabular-nums">
                       {formatProbability(liveProbability)}
                     </p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Estimated W/L</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Est. W/L</p>
                     <p
-                      className={`text-2xl font-bold tabular-nums ${
+                      className={`text-lg sm:text-2xl font-bold tabular-nums ${
                         estimatedEV > 0
                           ? "text-green-600 dark:text-green-500"
                           : estimatedEV < 0
@@ -341,16 +341,16 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
             </Card>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6">
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Sport</p>
-                <Badge variant="secondary">{bet.sport}</Badge>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Sport</p>
+                <Badge variant="secondary" className="text-xs">{bet.sport}</Badge>
               </div>
 
               {bet.gameStartTime && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Game Status</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Game Status</p>
                   <GameStatusBadge
                     gameStartTime={bet.gameStartTime}
                     sport={bet.sport as Sport}
@@ -363,33 +363,33 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
 
               {bet.game && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Game</p>
-                  <p className="text-base">{bet.game}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Game</p>
+                  <p className="text-sm sm:text-base">{bet.game}</p>
                 </div>
               )}
 
               {/* Show betting selection clearly for moneyline bets */}
               {(bet.betType === 'Straight' || bet.betType === 'Live') && bet.game && bettingSelection !== bet.game && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Betting On</p>
-                  <p className="text-base font-semibold">{bettingSelection}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Betting On</p>
+                  <p className="text-sm sm:text-base font-semibold">{bettingSelection}</p>
                 </div>
               )}
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Opening Odds</p>
-                <p className="text-lg font-semibold tabular-nums">{formatOdds(bet.openingOdds)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Opening Odds</p>
+                <p className="text-base sm:text-lg font-semibold tabular-nums">{formatOdds(bet.openingOdds)}</p>
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Closing Odds</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Closing Odds</p>
                 {editingClosingOdds ? (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-1 sm:gap-2 mt-1">
                     <Input
                       value={closingOddsInput}
                       onChange={(e) => setClosingOddsInput(e.target.value)}
                       placeholder="-110"
-                      className="w-24"
+                      className="w-20 sm:w-24 h-8"
                       data-testid="input-closing-odds"
                     />
                     <Button 
@@ -397,29 +397,32 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                       variant="ghost" 
                       onClick={handleSaveClosingOdds}
                       disabled={calculating}
+                      className="h-8 w-8"
                     >
-                      {calculating ? <Calculator className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {calculating ? <Calculator className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                     </Button>
                     <Button 
                       size="icon" 
                       variant="ghost" 
                       onClick={() => setEditingClosingOdds(false)}
                       disabled={calculating}
+                      className="h-8 w-8"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3" />
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <p className="text-lg font-semibold tabular-nums">{formatOdds(bet.closingOdds)}</p>
+                  <div className="flex items-center gap-1 sm:gap-2">
+                    <p className="text-base sm:text-lg font-semibold tabular-nums">{formatOdds(bet.closingOdds)}</p>
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={handleStartEditClosingOdds}
                       data-testid="button-edit-closing-odds"
                       title="Manually enter closing odds"
+                      className="h-7 w-7 sm:h-8 sm:w-8"
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-3 w-3" />
                     </Button>
                     {!bet.closingOdds && (
                       <Button
@@ -429,11 +432,12 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                         disabled={fetchingCLV}
                         data-testid="button-auto-fetch-clv"
                         title="Try to automatically fetch closing odds"
+                        className="h-7 w-7 sm:h-8 sm:w-8"
                       >
                         {fetchingCLV ? (
-                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <RefreshCw className="h-3 w-3 animate-spin" />
                         ) : (
-                          <RefreshCw className="h-4 w-4" />
+                          <RefreshCw className="h-3 w-3" />
                         )}
                       </Button>
                     )}
@@ -442,23 +446,23 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Stake</p>
-                <p className="text-lg font-semibold tabular-nums">{formatCurrency(bet.stake)}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Stake</p>
+                <p className="text-base sm:text-lg font-semibold tabular-nums">{formatCurrency(bet.stake)}</p>
               </div>
 
               {bet.potentialWin && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Potential Win</p>
-                  <p className="text-lg font-semibold tabular-nums">{formatCurrency(bet.potentialWin)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Potential Win</p>
+                  <p className="text-base sm:text-lg font-semibold tabular-nums">{formatCurrency(bet.potentialWin)}</p>
                 </div>
               )}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">CLV (Closing Line Value)</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">CLV</p>
                 <p
-                  className={`text-lg font-semibold tabular-nums ${
+                  className={`text-base sm:text-lg font-semibold tabular-nums ${
                     bet.clv && parseFloat(bet.clv) > 0
                       ? "text-green-600 dark:text-green-500"
                       : bet.clv && parseFloat(bet.clv) < 0
@@ -471,9 +475,9 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Expected Value (EV)</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Expected Value</p>
                 <p
-                  className={`text-lg font-semibold tabular-nums ${
+                  className={`text-base sm:text-lg font-semibold tabular-nums ${
                     bet.expectedValue && parseFloat(bet.expectedValue) > 0
                       ? "text-green-600 dark:text-green-500"
                       : bet.expectedValue && parseFloat(bet.expectedValue) < 0
@@ -486,9 +490,9 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Profit/Loss</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Profit/Loss</p>
                 <p
-                  className={`text-lg font-semibold tabular-nums ${
+                  className={`text-base sm:text-lg font-semibold tabular-nums ${
                     bet.profit && parseFloat(bet.profit) > 0
                       ? "text-green-600 dark:text-green-500"
                       : bet.profit && parseFloat(bet.profit) < 0
@@ -501,25 +505,25 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               </div>
 
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Placed On</p>
-                <p className="text-lg font-semibold">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Placed On</p>
+                <p className="text-sm sm:text-lg font-semibold">
                   {format(new Date(bet.createdAt), "MMM dd, yyyy")}
                 </p>
               </div>
 
               {bet.gameStartTime && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Game Time</p>
-                  <p className="text-lg font-semibold">
-                    {format(new Date(bet.gameStartTime), "MMM dd, yyyy h:mm a")}
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Game Time</p>
+                  <p className="text-sm sm:text-lg font-semibold">
+                    {format(new Date(bet.gameStartTime), "MMM dd h:mm a")}
                   </p>
                 </div>
               )}
 
               {bet.settledAt && (
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Settled On</p>
-                  <p className="text-lg font-semibold">
+                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Settled On</p>
+                  <p className="text-sm sm:text-lg font-semibold">
                     {format(new Date(bet.settledAt), "MMM dd, yyyy")}
                   </p>
                 </div>
@@ -531,8 +535,8 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
             <>
               <Separator />
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Projection Source</p>
-                <p className="text-base">{bet.projectionSource}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Projection Source</p>
+                <p className="text-sm sm:text-base">{bet.projectionSource}</p>
               </div>
             </>
           )}
@@ -541,61 +545,65 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
             <>
               <Separator />
               <div>
-                <p className="text-sm text-muted-foreground mb-1">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">
                   {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? 'Legs' : 'Notes'}
                 </p>
                 {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? (
                   <ParlayLegsBadge notes={bet.notes} betType={bet.betType} />
                 ) : (
-                  <p className="text-base whitespace-pre-line">{bet.notes}</p>
+                  <p className="text-sm sm:text-base whitespace-pre-line">{bet.notes}</p>
                 )}
               </div>
             </>
           )}
         </div>
 
-        <DialogFooter className="px-4 sm:px-6 py-3 sm:py-4 gap-2 flex-col sm:flex-row shrink-0 border-t bg-background">
+        <DialogFooter className="px-3 sm:px-6 py-2 sm:py-4 gap-2 shrink-0 border-t bg-background">
           {onDelete && (
             <Button
               variant="outline"
-              className="border-red-500/50 text-red-600 hover:bg-red-500/10 sm:mr-auto"
+              size="sm"
+              className="border-red-500/50 text-red-600 hover:bg-red-500/10 sm:mr-auto w-full sm:w-auto"
               onClick={handleDelete}
               data-testid="button-delete-bet"
             >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Bet
+              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="text-xs sm:text-sm">Delete</span>
             </Button>
           )}
           
           {bet.status === "active" && onSettle && (
-            <>
-              <p className="text-sm text-muted-foreground hidden sm:block">Mark as:</p>
+            <div className="flex gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => onSettle("push")}
                 data-testid="button-settle-push"
+                className="flex-1 sm:flex-none"
               >
-                <Minus className="h-4 w-4 mr-2" />
-                Push
+                <Minus className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="text-xs sm:text-sm">Push</span>
               </Button>
               <Button
                 variant="outline"
-                className="border-red-500/50 text-red-600 hover:bg-red-500/10"
+                size="sm"
+                className="border-red-500/50 text-red-600 hover:bg-red-500/10 flex-1 sm:flex-none"
                 onClick={() => onSettle("lost")}
                 data-testid="button-settle-lost"
               >
-                <ThumbsDown className="h-4 w-4 mr-2" />
-                Lost
+                <ThumbsDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="text-xs sm:text-sm">Lost</span>
               </Button>
               <Button
-                className="bg-green-600 hover:bg-green-700"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
                 onClick={() => onSettle("won")}
                 data-testid="button-settle-won"
               >
-                <Trophy className="h-4 w-4 mr-2" />
-                Won
+                <Trophy className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                <span className="text-xs sm:text-sm">Won</span>
               </Button>
-            </>
+            </div>
           )}
         </DialogFooter>
       </DialogContent>

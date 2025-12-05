@@ -441,24 +441,24 @@ export default function SocialDashboard() {
       </Dialog>
 
       <Dialog open={!!detailBet} onOpenChange={() => setDetailBet(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
+        <DialogContent className="max-w-lg max-h-[85vh] w-[95vw] sm:w-full overflow-hidden flex flex-col p-0">
+          <DialogHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4 shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
               Bet Details
             </DialogTitle>
           </DialogHeader>
           {detailBet && (
-            <div className="overflow-y-auto flex-1 -mx-6 px-6" style={{ maxHeight: 'calc(90vh - 160px)' }}>
-              <div className="space-y-4 pb-2">
-                <div className="flex items-center gap-3 pb-3 border-b">
-                  <Avatar className="h-10 w-10">
+            <div className="overflow-y-auto flex-1 px-3 sm:px-6" style={{ maxHeight: 'calc(85vh - 140px)' }}>
+              <div className="space-y-3 sm:space-y-4 pb-2">
+                <div className="flex items-center gap-2 sm:gap-3 pb-2 sm:pb-3 border-b">
+                  <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
                     <AvatarImage src={detailBet.user.profileImageUrl || undefined} />
-                    <AvatarFallback>{getUserInitials(detailBet.user)}</AvatarFallback>
+                    <AvatarFallback className="text-xs sm:text-sm">{getUserInitials(detailBet.user)}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{getUserDisplayName(detailBet.user)}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="font-medium text-sm sm:text-base">{getUserDisplayName(detailBet.user)}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       {detailBet.createdAt && new Date(detailBet.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -466,26 +466,26 @@ export default function SocialDashboard() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{detailBet.sport}</Badge>
-                      <Badge variant="secondary">{detailBet.betType}</Badge>
+                    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{detailBet.sport}</Badge>
+                      <Badge variant="secondary" className="text-xs">{detailBet.betType}</Badge>
                       {detailBet.status !== 'active' && (
-                        <Badge variant={detailBet.result === 'won' ? 'default' : detailBet.result === 'lost' ? 'destructive' : 'secondary'}>
+                        <Badge variant={detailBet.result === 'won' ? 'default' : detailBet.result === 'lost' ? 'destructive' : 'secondary'} className="text-xs">
                           {detailBet.result || detailBet.status}
                         </Badge>
                       )}
                     </div>
-                    <span className="font-mono font-bold text-lg">{formatOdds(detailBet.openingOdds)}</span>
+                    <span className="font-mono font-bold text-base sm:text-lg">{formatOdds(detailBet.openingOdds)}</span>
                   </div>
 
-                  <p className="font-semibold text-lg">{detailBet.team}</p>
+                  <p className="font-semibold text-base sm:text-lg">{detailBet.team}</p>
                   
                   {detailBet.game && (
-                    <p className="text-muted-foreground">{detailBet.game}</p>
+                    <p className="text-sm sm:text-base text-muted-foreground">{detailBet.game}</p>
                   )}
 
                   {detailBet.player && detailBet.market && (
-                    <p className="text-muted-foreground">
+                    <p className="text-sm sm:text-base text-muted-foreground">
                       {detailBet.player} {detailBet.overUnder} {detailBet.line} {detailBet.market}
                     </p>
                   )}
@@ -493,17 +493,17 @@ export default function SocialDashboard() {
 
                 {(detailBet.betType === 'Parlay' || detailBet.betType === 'Teaser') && (
                   <div className="space-y-2">
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Target className="h-4 w-4" />
+                    <h4 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
+                      <Target className="h-3 w-3 sm:h-4 sm:w-4" />
                       Legs ({parseParlayLegs(detailBet.notes).length})
                     </h4>
                     <div className="space-y-2">
                       {parseParlayLegs(detailBet.notes).length > 0 ? (
                         parseParlayLegs(detailBet.notes).map((leg, idx) => (
-                          <Card key={idx} className="p-3">
+                          <Card key={idx} className="p-2 sm:p-3">
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
+                                <div className="flex items-center gap-1 sm:gap-2 mb-1 flex-wrap">
                                   <Badge variant="outline" className="text-xs">{leg.sport}</Badge>
                                   {leg.status && (
                                     <span className={`flex items-center gap-1 text-xs font-medium ${
@@ -518,8 +518,8 @@ export default function SocialDashboard() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="font-medium text-sm">{leg.details}</p>
-                                <div className="flex items-center gap-2 mt-1">
+                                <p className="font-medium text-xs sm:text-sm">{leg.details}</p>
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
                                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
                                     {leg.dateTime}
@@ -535,7 +535,7 @@ export default function SocialDashboard() {
                           </Card>
                         ))
                       ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">
+                        <p className="text-xs sm:text-sm text-muted-foreground text-center py-3">
                           No leg details available
                         </p>
                       )}
@@ -543,27 +543,27 @@ export default function SocialDashboard() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 pt-2 sm:pt-3 border-t">
                   <div>
-                    <p className="text-sm text-muted-foreground">Stake</p>
-                    <p className="font-semibold">${detailBet.stake}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Stake</p>
+                    <p className="font-semibold text-sm sm:text-base">${detailBet.stake}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Potential Win</p>
-                    <p className="font-semibold">${detailBet.potentialWin || '—'}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Potential Win</p>
+                    <p className="font-semibold text-sm sm:text-base">${detailBet.potentialWin || '—'}</p>
                   </div>
                   {detailBet.clv && (
                     <div>
-                      <p className="text-sm text-muted-foreground">CLV</p>
-                      <p className={`font-semibold ${parseFloat(detailBet.clv) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <p className="text-xs sm:text-sm text-muted-foreground">CLV</p>
+                      <p className={`font-semibold text-sm sm:text-base ${parseFloat(detailBet.clv) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {parseFloat(detailBet.clv) >= 0 ? '+' : ''}{detailBet.clv}%
                       </p>
                     </div>
                   )}
                   {detailBet.profit && detailBet.status === 'settled' && (
                     <div>
-                      <p className="text-sm text-muted-foreground">Profit</p>
-                      <p className={`font-semibold ${parseFloat(detailBet.profit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <p className="text-xs sm:text-sm text-muted-foreground">Profit</p>
+                      <p className={`font-semibold text-sm sm:text-base ${parseFloat(detailBet.profit) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {parseFloat(detailBet.profit) >= 0 ? '+' : ''}${detailBet.profit}
                       </p>
                     </div>
@@ -572,20 +572,22 @@ export default function SocialDashboard() {
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2 flex-shrink-0 pt-4 border-t">
-            <Button variant="outline" onClick={() => setDetailBet(null)} data-testid="button-close-details">
+          <DialogFooter className="gap-2 flex-shrink-0 px-3 sm:px-6 py-2 sm:py-4 border-t bg-background">
+            <Button variant="outline" size="sm" onClick={() => setDetailBet(null)} data-testid="button-close-details" className="flex-1 sm:flex-none">
               Close
             </Button>
             {detailBet && detailBet.status === 'active' && detailBet.userId !== user?.id && (
               <Button 
+                size="sm"
                 onClick={() => {
                   setDetailBet(null);
                   handleTailClick(detailBet);
                 }}
                 data-testid="button-tail-from-details"
+                className="flex-1 sm:flex-none"
               >
-                <Copy className="h-4 w-4 mr-2" />
-                Tail This Bet
+                <Copy className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="text-xs sm:text-sm">Tail Bet</span>
               </Button>
             )}
           </DialogFooter>

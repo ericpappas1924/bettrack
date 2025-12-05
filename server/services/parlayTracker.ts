@@ -228,6 +228,15 @@ export async function autoSettleParlayBet(bet: any): Promise<boolean> {
   const betId = bet.id.substring(0, 8);
   console.log(`\n🎯 [PARLAY-TRACKER] Processing ${bet.betType} bet ${betId}`);
   
+  // Sports that we support for auto-settlement (have APIs)
+  const SUPPORTED_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'WNBA', 'MLS'];
+  
+  // Skip esports and unsupported sports from auto-settlement
+  if (bet.sport && !SUPPORTED_SPORTS.includes(bet.sport)) {
+    console.log(`   ⏭️  Skipping ${bet.sport} parlay: Sport not supported for auto-settlement`);
+    return false;
+  }
+  
   // Parse legs from notes (they have format: [DATE] [SPORT] BET_DETAILS)
   if (!bet.notes) {
     console.log(`   ❌ No notes found - cannot parse legs`);
@@ -250,6 +259,12 @@ export async function autoSettleParlayBet(bet: any): Promise<boolean> {
   for (let i = 0; i < legs.length; i++) {
     const leg = legs[i];
     console.log(`   [Leg ${i + 1}/${legs.length}] ${leg.team} (${leg.sport})`);
+    
+    // Skip legs from unsupported sports (esports, UFC, etc.)
+    if (leg.sport && !SUPPORTED_SPORTS.includes(leg.sport)) {
+      console.log(`      ⏭️  Skipping ${leg.sport} leg: Sport not supported for auto-settlement`);
+      return false; // Can't auto-settle parlays with unsupported sports
+    }
     
     const result = await trackParlayLeg(leg);
     if (!result) {

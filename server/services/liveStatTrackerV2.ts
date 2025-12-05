@@ -662,6 +662,14 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
     return null;
   }
   
+  // Skip esports and unsupported sports (CS2, DOTA2, LOL, VALORANT, UFC, etc.)
+  // These require manual settlement as we don't have APIs for them
+  const SUPPORTED_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'WNBA', 'MLS'];
+  if (bet.sport && !SUPPORTED_SPORTS.includes(bet.sport)) {
+    console.log(`⏭️  [TRACKER] Skipping bet ${betId}: ${bet.sport} is not supported for live tracking/auto-settlement`);
+    return null;
+  }
+  
   // CRITICAL: Must have game time to determine if live/completed
   if (!bet.gameStartTime) {
     console.log(`⏭️  [TRACKER] Skipping bet ${betId}: no game time (cannot determine if live/completed)`);
@@ -1110,13 +1118,23 @@ export async function autoSettleCompletedBets(userId: string): Promise<void> {
   // Count by sport for logging
   const sportCounts: Record<string, number> = {};
   
+  // Sports that we support for auto-settlement (have APIs)
+  const SUPPORTED_SPORTS = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'WNBA', 'MLS'];
+  
   for (const bet of activeBets) {
     const betType = bet.betType?.toLowerCase() || '';
     const isMultiLeg = betType.includes('parlay') || betType.includes('teaser');
+    const sport = bet.sport || 'Unknown';
     
     // Count by sport
-    const sport = bet.sport || 'Unknown';
     sportCounts[sport] = (sportCounts[sport] || 0) + 1;
+    
+    // Skip esports and unsupported sports from auto-settlement
+    // CS2, DOTA2, LOL, VALORANT, UFC, etc. require manual settlement
+    if (!SUPPORTED_SPORTS.includes(sport)) {
+      console.log(`⏭️  [AUTO-SETTLE] Skipping ${sport} bet ${bet.id.substring(0, 8)}: Sport not supported for auto-settlement`);
+      continue;
+    }
     
     if (isMultiLeg) {
       parlayBets.push(bet);

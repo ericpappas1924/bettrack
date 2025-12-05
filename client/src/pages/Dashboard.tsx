@@ -4,11 +4,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { MetricCard } from "@/components/MetricCard";
 import { BetTable } from "@/components/BetTable";
 import { BetFilters } from "@/components/BetFilters";
+import { BetCalendar } from "@/components/BetCalendar";
 import { AddBetDialog } from "@/components/AddBetDialog";
 import { BetDetailDialog } from "@/components/BetDetailDialog";
 import { ImportBetsDialog } from "@/components/ImportBetsDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { LiveStat } from "@/components/LiveStatsBadge";
@@ -19,7 +21,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User, RefreshCw } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Plus, DollarSign, TrendingUp, Target, BarChart3, Zap, Upload, Loader2, LogOut, User, X, CalendarDays } from "lucide-react";
+import { format, isSameDay, startOfDay, isToday } from "date-fns";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -41,6 +51,9 @@ export default function Dashboard() {
   const [gameStatus, setGameStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [fetchingCLV, setFetchingCLV] = useState<Set<string>>(new Set());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [showCalendar, setShowCalendar] = useState(true);
+  const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
 
   const { data: bets = [], isLoading } = useQuery<Bet[]>({
     queryKey: ["/api/bets"],
@@ -238,11 +251,17 @@ export default function Dashboard() {
       const currentGameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
       matchesGameStatus = currentGameStatus === gameStatus;
     } else if (gameStatus !== "all" && !bet.gameStartTime) {
-      // If filtering by game status but bet has no gameStartTime, exclude it
       matchesGameStatus = false;
     }
     
-    return matchesSport && matchesStatus && matchesGameStatus && matchesSearch;
+    // Date filtering - filter by gameStartTime or createdAt
+    let matchesDate = true;
+    if (selectedDate) {
+      const betDate = bet.gameStartTime ? new Date(bet.gameStartTime) : new Date(bet.createdAt);
+      matchesDate = isSameDay(startOfDay(betDate), startOfDay(selectedDate));
+    }
+    
+    return matchesSport && matchesStatus && matchesGameStatus && matchesSearch && matchesDate;
   });
 
   const activeBets = bets.filter((bet) => bet.status === "active");
@@ -356,6 +375,13 @@ export default function Dashboard() {
     setGameStatus("all");
     setSearchQuery("");
   };
+
+  const handleClearDate = () => {
+    setSelectedDate(null);
+  };
+
+  const hasActiveFilters = sport !== "all" || status !== "all" || gameStatus !== "all" || searchQuery !== "";
+  const isViewingAllBets = !selectedDate && !hasActiveFilters;
 
   const handleUpdateLiveOdds = (betId: string, liveOdds: string) => {
     updateBetMutation.mutate({ id: betId, liveOdds });
@@ -489,9 +515,80 @@ export default function Dashboard() {
 
           {/* Bets Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base sm:text-lg font-semibold">Your Bets</h2>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-semibold">Your Bets</h2>
+                {/* Mobile Calendar Sheet Trigger */}
+                <Sheet open={mobileCalendarOpen} onOpenChange={setMobileCalendarOpen}>
+                  <SheetTrigger asChild>
+                    <Badge 
+                      variant="secondary" 
+                      className="gap-1 cursor-pointer hover-elevate md:hidden"
+                      data-testid="badge-mobile-calendar-trigger"
+                    >
+                      <CalendarDays className="h-3 w-3" />
+                      {selectedDate ? (isToday(selectedDate) ? 'Today' : format(selectedDate, 'MMM d')) : 'All dates'}
+                    </Badge>
+                  </SheetTrigger>
+                  <SheetContent side="bottom" className="h-auto max-h-[80vh]">
+                    <SheetHeader className="pb-2">
+                      <SheetTitle>Select Date</SheetTitle>
+                    </SheetHeader>
+                    <div className="pb-4">
+                      <BetCalendar
+                        bets={bets}
+                        selectedDate={selectedDate}
+                        onSelectDate={(date) => {
+                          setSelectedDate(date);
+                          setMobileCalendarOpen(false);
+                        }}
+                      />
+                      {selectedDate && (
+                        <Button 
+                          variant="outline" 
+                          className="w-full mt-3"
+                          onClick={() => {
+                            setSelectedDate(null);
+                            setMobileCalendarOpen(false);
+                          }}
+                          data-testid="button-mobile-clear-date"
+                        >
+                          View All Dates
+                        </Button>
+                      )}
+                    </div>
+                  </SheetContent>
+                </Sheet>
+                {/* Desktop Date Badge */}
+                {selectedDate && (
+                  <Badge 
+                    variant="secondary" 
+                    className="gap-1 cursor-pointer hover-elevate hidden md:flex"
+                    onClick={handleClearDate}
+                    data-testid="badge-selected-date"
+                  >
+                    <CalendarDays className="h-3 w-3" />
+                    {isToday(selectedDate) ? 'Today' : format(selectedDate, 'MMM d')}
+                    <X className="h-3 w-3 ml-1" />
+                  </Badge>
+                )}
+                {!selectedDate && (
+                  <Badge variant="outline" className="text-xs hidden md:flex" data-testid="badge-all-dates">
+                    All dates
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className="hidden md:flex"
+                  data-testid="button-toggle-calendar"
+                >
+                  <CalendarDays className="h-4 w-4 mr-2" />
+                  {showCalendar ? 'Hide' : 'Show'} Calendar
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} data-testid="button-import-bets">
                   <Upload className="h-4 w-4 md:mr-2" />
                   <span className="hidden md:inline">Import</span>
@@ -503,41 +600,63 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <BetFilters
-              sport={sport}
-              status={status}
-              gameStatus={gameStatus}
-              searchQuery={searchQuery}
-              onSportChange={setSport}
-              onStatusChange={setStatus}
-              onGameStatusChange={setGameStatus}
-              onSearchChange={setSearchQuery}
-              onClear={handleClearFilters}
-            />
+            {/* Calendar and Filters Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              {/* Calendar - Hidden on mobile by default, shown on desktop */}
+              {showCalendar && (
+                <div className="lg:col-span-1 hidden md:block">
+                  <BetCalendar
+                    bets={bets}
+                    selectedDate={selectedDate}
+                    onSelectDate={setSelectedDate}
+                  />
+                </div>
+              )}
+              
+              {/* Bets list */}
+              <div className={showCalendar ? "lg:col-span-3" : "lg:col-span-4"}>
+                <div className="space-y-4">
+                  <BetFilters
+                    sport={sport}
+                    status={status}
+                    gameStatus={gameStatus}
+                    searchQuery={searchQuery}
+                    onSportChange={setSport}
+                    onStatusChange={setStatus}
+                    onGameStatusChange={setGameStatus}
+                    onSearchChange={setSearchQuery}
+                    onClear={handleClearFilters}
+                  />
 
-            {bets.length === 0 ? (
-              <EmptyState
-                title="No bets yet"
-                description="Import your bets or add them manually to start tracking."
-                actionLabel="Import Bets"
-                onAction={() => setImportOpen(true)}
-              />
-            ) : filteredBets.length === 0 ? (
-              <EmptyState
-                title="No bets found"
-                description="Try adjusting your filters."
-                actionLabel="Clear Filters"
-                onAction={handleClearFilters}
-              />
-            ) : (
-              <BetTable
-                bets={filteredBets}
-                liveStats={liveStats}
-                onRowClick={(bet) => setDetailBet(bet as Bet)}
-                onFetchCLV={handleFetchCLV}
-                fetchingCLV={fetchingCLV}
-              />
-            )}
+                  {bets.length === 0 ? (
+                    <EmptyState
+                      title="No bets yet"
+                      description="Import your bets or add them manually to start tracking."
+                      actionLabel="Import Bets"
+                      onAction={() => setImportOpen(true)}
+                    />
+                  ) : filteredBets.length === 0 ? (
+                    <EmptyState
+                      title="No bets found"
+                      description={selectedDate 
+                        ? `No bets on ${isToday(selectedDate) ? 'today' : format(selectedDate, 'MMM d, yyyy')}. Try selecting a different date or clear the date filter.`
+                        : "Try adjusting your filters."
+                      }
+                      actionLabel={selectedDate ? "View All Dates" : "Clear Filters"}
+                      onAction={selectedDate ? handleClearDate : handleClearFilters}
+                    />
+                  ) : (
+                    <BetTable
+                      bets={filteredBets}
+                      liveStats={liveStats}
+                      onRowClick={(bet) => setDetailBet(bet as Bet)}
+                      onFetchCLV={handleFetchCLV}
+                      fetchingCLV={fetchingCLV}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>

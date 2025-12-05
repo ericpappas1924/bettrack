@@ -603,12 +603,22 @@ export function parseBetPaste(rawText: string): ParseResult {
         line = propDetails.line;
         
         // For player props, use market type to help determine sport
-        // Football-specific markets: Receiving Yards, Rushing Yards, Passing Yards, etc.
         const marketUpper = (market || '').toUpperCase();
-        if (marketUpper.includes('RECEIVING YARDS') || marketUpper.includes('RUSHING YARDS') || 
-            marketUpper.includes('PASSING YARDS') || marketUpper.includes('RECEPTIONS') ||
-            marketUpper.includes('CARRIES') || marketUpper.includes('TOUCHDOWNS') ||
-            marketUpper.includes('PASS INTERCEPTIONS') || marketUpper.includes('COMPLETIONS')) {
+        
+        // Basketball-specific markets (check FIRST to avoid college team name conflicts)
+        if (marketUpper.includes('POINTS') || marketUpper.includes('ASSISTS') || 
+            marketUpper.includes('REBOUNDS') || marketUpper.includes('TOTAL REBOUNDS') ||
+            marketUpper.includes('PTS + REB + AST') || marketUpper.includes('THREES') ||
+            marketUpper.includes('THREE POINTERS') || marketUpper.includes('BLOCKS') ||
+            marketUpper.includes('STEALS') || marketUpper.includes('PRA')) {
+          // This is definitely basketball - force NBA
+          sport = SPORTS.NBA;
+        }
+        // Football-specific markets: Receiving Yards, Rushing Yards, Passing Yards, etc.
+        else if (marketUpper.includes('RECEIVING YARDS') || marketUpper.includes('RUSHING YARDS') || 
+                 marketUpper.includes('PASSING YARDS') || marketUpper.includes('RECEPTIONS') ||
+                 marketUpper.includes('CARRIES') || marketUpper.includes('TOUCHDOWNS') ||
+                 marketUpper.includes('PASS INTERCEPTIONS') || marketUpper.includes('COMPLETIONS')) {
           // This is definitely football - check if NCAAF or NFL
           sport = game ? getSportFromText(game) : SPORTS.NCAAF; // Default to NCAAF for college teams
           if (sport === 'Other' || sport === 'NBA') {

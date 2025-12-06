@@ -11,6 +11,8 @@ import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
 import { ParlayLegsBadge } from "./ParlayLegsBadge";
 import { ParlayLiveProgress, type ParlayLiveStats } from "./ParlayLiveProgress";
+import { RoundRobinSettlement } from "./RoundRobinSettlement";
+import { isRoundRobin } from "@/lib/roundRobin";
 import { Badge } from "@/components/ui/badge";
 import type { Sport } from "@shared/betTypes";
 import { Button } from "@/components/ui/button";
@@ -130,6 +132,61 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
   const handleMarkAsPotd = () => {
     if (!bet || !selectedPotdCategory) return;
     markPotdMutation.mutate({ betId: bet.id, categoryId: selectedPotdCategory });
+  };
+
+  // Settle individual round robin leg mutation
+  const settleLegMutation = useMutation({
+    mutationFn: async ({ betId, legIndex, result }: { betId: string; legIndex: number; result: 'won' | 'lost' | 'push' }) => {
+      const res = await apiRequest("POST", `/api/bets/${betId}/settle-leg`, { legIndex, result });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "Leg settled",
+        description: "The leg has been marked as settled.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to settle leg",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Settle entire round robin mutation
+  const settleRoundRobinMutation = useMutation({
+    mutationFn: async ({ betId, profit }: { betId: string; profit: number }) => {
+      const res = await apiRequest("POST", `/api/bets/${betId}/settle-round-robin`, { profit });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      toast({
+        title: "Round robin settled",
+        description: "All parlays have been calculated and the bet is now settled.",
+      });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to settle round robin",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSettleLeg = (legIndex: number, result: 'won' | 'lost' | 'push') => {
+    if (!bet) return;
+    settleLegMutation.mutate({ betId: bet.id, legIndex, result });
+  };
+
+  const handleSettleRoundRobin = (profit: number) => {
+    if (!bet) return;
+    settleRoundRobinMutation.mutate({ betId: bet.id, profit });
   };
 
   if (!bet) return null;
@@ -589,7 +646,25 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
             </>
           )}
 
-          {bet.notes && (
+          {/* Round Robin Settlement UI */}
+          {bet.notes && isRoundRobin(bet.betType) && bet.status === "active" && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Round Robin Legs</p>
+                <RoundRobinSettlement
+                  betType={bet.betType}
+                  totalStake={parseFloat(bet.stake)}
+                  notes={bet.notes}
+                  onSettleLeg={handleSettleLeg}
+                  onSettleAll={handleSettleRoundRobin}
+                  isSettling={settleLegMutation.isPending || settleRoundRobinMutation.isPending}
+                />
+              </div>
+            </>
+          )}
+
+          {bet.notes && !isRoundRobin(bet.betType) && (
             <>
               <Separator />
               <div>

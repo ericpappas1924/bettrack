@@ -547,6 +547,102 @@ export async function registerRoutes(
     }
   });
 
+  // Settle individual round robin leg
+  app.post("/api/bets/:id/settle-leg", isAuthenticated, async (req: any, res) => {
+    try {
+      const { legIndex, result } = z.object({
+        legIndex: z.number().int().min(0),
+        result: z.enum(["won", "lost", "push"])
+      }).parse(req.body);
+      
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      // Check if this is a round robin
+      const betType = existingBet.betType?.toLowerCase() || '';
+      if (!betType.includes('round robin')) {
+        return res.status(400).json({ error: "This endpoint is only for round robin bets" });
+      }
+      
+      // Parse notes and update the specific leg's status
+      const notes = existingBet.notes || '';
+      const lines = notes.split('\n');
+      
+      // Find and update the leg at legIndex
+      let legCount = 0;
+      const updatedLines = lines.map((line: string) => {
+        // Check if this line is a leg (has the format with [Status] at end)
+        if (line.match(/\[(Pending|Won|Lost|Push)\]\s*$/i)) {
+          if (legCount === legIndex) {
+            // Update this leg's status
+            const newStatus = result.charAt(0).toUpperCase() + result.slice(1);
+            const updatedLine = line.replace(/\[(Pending|Won|Lost|Push)\]\s*$/i, `[${newStatus}]`);
+            legCount++;
+            return updatedLine;
+          }
+          legCount++;
+        }
+        return line;
+      });
+      
+      const updatedNotes = updatedLines.join('\n');
+      
+      const bet = await storage.updateBet(req.params.id, {
+        notes: updatedNotes,
+      });
+      
+      res.json(bet);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      console.error("Error settling round robin leg:", error);
+      res.status(500).json({ error: "Failed to settle leg" });
+    }
+  });
+
+  // Settle round robin with calculated profit
+  app.post("/api/bets/:id/settle-round-robin", isAuthenticated, async (req: any, res) => {
+    try {
+      const { profit } = z.object({
+        profit: z.number()
+      }).parse(req.body);
+      
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      if (existingBet.userId !== req.user.claims.sub) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      // Determine result based on profit
+      const result = profit > 0 ? "won" : profit < 0 ? "lost" : "push";
+      
+      const bet = await storage.updateBet(req.params.id, {
+        status: "settled",
+        result,
+        profit: profit.toFixed(2),
+        settledAt: new Date(),
+      });
+      
+      res.json(bet);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      console.error("Error settling round robin:", error);
+      res.status(500).json({ error: "Failed to settle round robin" });
+    }
+  });
+
   // Note: live-stats and auto-settle routes moved earlier to avoid route matching conflicts
 
   // Calculate CLV from closing odds

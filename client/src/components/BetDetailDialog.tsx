@@ -10,6 +10,7 @@ import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
 import { ParlayLegsBadge } from "./ParlayLegsBadge";
+import { ParlayLiveProgress, type ParlayLiveStats } from "./ParlayLiveProgress";
 import { Badge } from "@/components/ui/badge";
 import type { Sport } from "@shared/betTypes";
 import { Button } from "@/components/ui/button";
@@ -79,9 +80,10 @@ interface BetDetailDialogProps {
   onUpdateLiveOdds?: (betId: string, liveOdds: string) => void;
   onSettle?: (result: "won" | "lost" | "push") => void;
   onDelete?: (betId: string) => void;
+  parlayLiveStats?: ParlayLiveStats | null;
 }
 
-export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle, onDelete }: BetDetailDialogProps) {
+export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle, onDelete, parlayLiveStats }: BetDetailDialogProps) {
   const { toast } = useToast();
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
@@ -595,7 +597,11 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                   {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? 'Legs' : 'Notes'}
                 </p>
                 {(bet.betType === 'Parlay' || bet.betType === 'Teaser' || bet.betType === 'Player Prop Parlay') ? (
-                  <ParlayLegsBadge notes={bet.notes} betType={bet.betType} />
+                  parlayLiveStats && parlayLiveStats.legs.length > 0 ? (
+                    <ParlayLiveProgress parlayStats={parlayLiveStats} />
+                  ) : (
+                    <ParlayLegsBadge notes={bet.notes} betType={bet.betType} />
+                  )
                 ) : (
                   <p className="text-sm sm:text-base whitespace-pre-line">{bet.notes}</p>
                 )}

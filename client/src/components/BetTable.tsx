@@ -12,6 +12,7 @@ import { BetStatusBadge } from "./BetStatusBadge";
 import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import type { LiveStat } from "./LiveStatsBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
+import { ParlayLiveProgressCompact, type ParlayLiveStats } from "./ParlayLiveProgress";
 import { Badge } from "@/components/ui/badge";
 import type { Sport } from "@shared/betTypes";
 import {
@@ -51,12 +52,13 @@ interface Bet {
 interface BetTableProps {
   bets: Bet[];
   liveStats?: LiveStat[];
+  parlayLiveStats?: ParlayLiveStats[];
   onRowClick?: (bet: Bet) => void;
   onFetchCLV?: (betId: string) => void;
   fetchingCLV?: Set<string>;
 }
 
-export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchingCLV = new Set() }: BetTableProps) {
+export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClick, onFetchCLV, fetchingCLV = new Set() }: BetTableProps) {
   const getLiveStatForBet = (betId: string) => {
     const stat = liveStats.find(stat => stat.betId === betId);
     if (stat) {
@@ -68,6 +70,15 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
       });
     }
     return stat;
+  };
+
+  const getParlayStatsForBet = (betId: string): ParlayLiveStats | null => {
+    return parlayLiveStats.find(p => p.betId === betId) || null;
+  };
+
+  const isParlay = (betType: string) => {
+    const bt = betType?.toLowerCase() || '';
+    return bt.includes('parlay') || bt.includes('teaser');
   };
   
   // Debug: Log all live stats on mount/update
@@ -132,6 +143,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
           const { baselineProbability, liveProbability } = getWinProbabilities(bet);
           const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
           const liveStat = getLiveStatForBet(bet.id);
+          const parlayStats = isParlay(bet.betType) ? getParlayStatsForBet(bet.id) : null;
 
           return (
             <Card
@@ -171,6 +183,9 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                             </span>
                           )}
                         </div>
+                      )}
+                      {parlayStats && parlayStats.legs.length > 0 && (
+                        <ParlayLiveProgressCompact parlayStats={parlayStats} />
                       )}
                     </div>
                     <p className="font-medium truncate">{bet.team}</p>
@@ -357,6 +372,7 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
               const { baselineProbability, liveProbability } = getWinProbabilities(bet);
               const estimatedEV = bet.status === "active" ? getEstimatedEV(bet) : null;
               const liveStat = getLiveStatForBet(bet.id);
+              const parlayStats = isParlay(bet.betType) ? getParlayStatsForBet(bet.id) : null;
 
               return (
                 <TableRow
@@ -457,6 +473,8 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                           </>
                         )}
                       </div>
+                    ) : parlayStats && parlayStats.legs.length > 0 ? (
+                      <ParlayLiveProgressCompact parlayStats={parlayStats} />
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>
                     )}

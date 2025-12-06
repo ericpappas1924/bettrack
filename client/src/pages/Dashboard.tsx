@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { LiveStat } from "@/components/LiveStatsBadge";
+import type { ParlayLiveStats } from "@/components/ParlayLiveProgress";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,6 +94,26 @@ export default function Dashboard() {
     })(),
   });
 
+  // Check if there are any active parlays
+  const hasActiveParlays = bets.some((bet) => {
+    if (bet.status !== 'active') return false;
+    const betType = bet.betType?.toLowerCase() || '';
+    return betType.includes('parlay') || betType.includes('teaser');
+  });
+
+  // Fetch parlay live stats (for active parlays) - uses its own polling condition
+  const { data: parlayLiveStats = [] } = useQuery<ParlayLiveStats[]>({
+    queryKey: ["/api/bets/parlay-live-stats"],
+    // Always poll every 60 seconds if there are active parlays (independent of gameStartTime)
+    refetchInterval: hasActiveParlays ? 60000 : false,
+    enabled: hasActiveParlays,
+  });
+
+  // Helper to get parlay stats for a specific bet
+  const getParlayLiveStatsForBet = (betId: string): ParlayLiveStats | null => {
+    return parlayLiveStats.find(p => p.betId === betId) || null;
+  };
+
   // Debug logging for live stats
   useEffect(() => {
     if (liveStats.length > 0) {
@@ -113,6 +134,20 @@ export default function Dashboard() {
       console.warn(`⚠️  [DASHBOARD] No live stats received but live bets exist`);
     }
   }, [liveStats, isLoadingLiveStats, bets]);
+
+  // Debug logging for parlay live stats
+  useEffect(() => {
+    if (hasActiveParlays) {
+      console.log(`🎲 [DASHBOARD] Active parlays detected - polling enabled`);
+      if (parlayLiveStats.length > 0) {
+        console.log(`✅ [DASHBOARD] Received parlay stats for ${parlayLiveStats.length} parlay(s):`, parlayLiveStats.map(p => ({
+          betId: p.betId.substring(0, 8),
+          legsCount: p.legs.length,
+          liveLegs: p.legs.filter(l => l.isLive).length
+        })));
+      }
+    }
+  }, [hasActiveParlays, parlayLiveStats]);
 
   // Live stats are fetched via API with refetchInterval
   // Server-side scheduler ensures games are always tracked
@@ -683,6 +718,7 @@ export default function Dashboard() {
                     <BetTable
                       bets={filteredBets}
                       liveStats={liveStats}
+                      parlayLiveStats={parlayLiveStats}
                       onRowClick={(bet) => setDetailBet(bet as Bet)}
                       onFetchCLV={handleFetchCLV}
                       fetchingCLV={fetchingCLV}
@@ -726,6 +762,7 @@ export default function Dashboard() {
         onUpdateLiveOdds={handleUpdateLiveOdds}
         onSettle={handleSettleBet}
         onDelete={handleDeleteBet}
+        parlayLiveStats={detailBet ? getParlayLiveStatsForBet(detailBet.id) : null}
       />
     </div>
   );

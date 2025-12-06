@@ -221,6 +221,167 @@ async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; is
 }
 
 /**
+ * Live stat for a single parlay leg (for display, not settlement)
+ */
+export interface ParlayLegLiveStat {
+  legIndex: number;
+  description: string;
+  sport: string;
+  team: string;
+  betType: string;
+  line?: number;
+  overUnder?: string;
+  gameDate: Date | null;
+  
+  // Live tracking data
+  isLive: boolean;
+  isComplete: boolean;
+  isWinning: boolean;
+  status: 'pending' | 'live' | 'won' | 'lost' | 'unknown';
+  
+  // Score info
+  homeTeam?: string;
+  awayTeam?: string;
+  homeScore?: number;
+  awayScore?: number;
+  gameStatus?: string;
+  
+  // For totals
+  totalScore?: number;
+}
+
+/**
+ * Get live stats for all parlay legs (for display purposes)
+ */
+export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat[]> {
+  const betId = bet.id.substring(0, 8);
+  console.log(`\n📊 [PARLAY-LIVE] Getting live stats for ${bet.betType} bet ${betId}`);
+  
+  if (!bet.notes) {
+    console.log(`   ❌ No notes found - cannot parse legs`);
+    return [];
+  }
+  
+  const legs = parseParlayLegsFromNotes(bet.notes);
+  
+  if (legs.length === 0) {
+    console.log(`   ❌ No legs could be parsed from notes`);
+    return [];
+  }
+  
+  console.log(`   📊 Found ${legs.length} leg(s) to track`);
+  
+  const legStats: ParlayLegLiveStat[] = [];
+  
+  for (let i = 0; i < legs.length; i++) {
+    const leg = legs[i];
+    console.log(`   [Leg ${i + 1}/${legs.length}] ${leg.team} (${leg.sport})`);
+    
+    // Check if leg already has a status tag in the notes
+    const legLine = bet.notes.split('\n')[i] || '';
+    const hasWonTag = legLine.includes('[Won]');
+    const hasLostTag = legLine.includes('[Lost]');
+    
+    // Create base stat object
+    const baseStat: ParlayLegLiveStat = {
+      legIndex: i,
+      description: leg.rawDescription,
+      sport: leg.sport,
+      team: leg.team,
+      betType: leg.betType,
+      line: leg.line,
+      overUnder: leg.overUnder,
+      gameDate: leg.gameDate,
+      isLive: false,
+      isComplete: hasWonTag || hasLostTag,
+      isWinning: hasWonTag,
+      status: hasWonTag ? 'won' : hasLostTag ? 'lost' : 'pending'
+    };
+    
+    // If already settled via tags, use that status
+    if (hasWonTag || hasLostTag) {
+      console.log(`      ✅ Leg already marked as ${hasWonTag ? 'Won' : 'Lost'}`);
+      legStats.push(baseStat);
+      continue;
+    }
+    
+    // Need game date to find the game
+    if (!leg.gameDate) {
+      console.log(`      ❌ No game date - cannot track`);
+      legStats.push(baseStat);
+      continue;
+    }
+    
+    // Check if game has started
+    const now = new Date();
+    if (leg.gameDate > now) {
+      console.log(`      ⏳ Game hasn't started yet`);
+      baseStat.status = 'pending';
+      legStats.push(baseStat);
+      continue;
+    }
+    
+    // Try to find the game and get live stats
+    let fullMatchup = '';
+    
+    if (leg.team.includes(' vs ')) {
+      fullMatchup = leg.team;
+    } else {
+      const game = await findGameByTeamAndDate(leg.sport, leg.team, leg.gameDate);
+      if (!game) {
+        console.log(`      ⚠️  Game not found for ${leg.team}`);
+        baseStat.status = 'unknown';
+        legStats.push(baseStat);
+        continue;
+      }
+      fullMatchup = `${game.awayTeam} vs ${game.homeTeam}`;
+      baseStat.awayTeam = game.awayTeam;
+      baseStat.homeTeam = game.homeTeam;
+    }
+    
+    // Create temporary bet object for tracking
+    const tempBet = {
+      id: `parlay-${betId}-leg-${i}`,
+      sport: leg.sport,
+      game: fullMatchup,
+      team: leg.team.includes(' vs ') ? 'TOTAL' : leg.team,
+      betType: leg.betType,
+      status: 'active',
+      gameStartTime: leg.gameDate
+    };
+    
+    // Get live stats using existing tracker
+    const result = await trackBetLiveStats(tempBet);
+    
+    if (result) {
+      baseStat.isLive = result.isLive;
+      baseStat.isComplete = result.isComplete;
+      baseStat.isWinning = result.isWinning;
+      baseStat.homeTeam = result.homeTeam;
+      baseStat.awayTeam = result.awayTeam;
+      baseStat.homeScore = result.homeScore;
+      baseStat.awayScore = result.awayScore;
+      baseStat.gameStatus = result.gameStatus;
+      baseStat.totalScore = result.homeScore + result.awayScore;
+      
+      if (result.isComplete) {
+        baseStat.status = result.isWinning ? 'won' : 'lost';
+      } else if (result.isLive) {
+        baseStat.status = 'live';
+      }
+      
+      console.log(`      ${result.isLive ? '🔴 LIVE' : result.isComplete ? '✅ Complete' : '⏳ Pending'} - ${result.isWinning ? 'Winning' : 'Losing'}`);
+    } else {
+      console.log(`      ⏳ Could not get live stats`);
+    }
+    
+    legStats.push(baseStat);
+  }
+  
+  return legStats;
+}
+
+/**
  * Auto-settle parlay or teaser bet
  * Only settles if ALL legs are complete
  */

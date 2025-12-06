@@ -6,6 +6,7 @@ import { insertBetSchema, updateBetSchema } from "@shared/schema";
 import { z } from "zod";
 import { fromZodError } from "zod-validation-error";
 import { trackMultipleBets, autoSettleCompletedBets } from "./services/liveStatTrackerV2";
+import { getParlayLegLiveStats, type ParlayLegLiveStat } from "./services/parlayTracker";
 import { batchFindGameStartTimes } from "./services/oddsApi";
 import { getGameStatus, GAME_STATUS, type Sport } from "@shared/betTypes";
 
@@ -107,6 +108,47 @@ export async function registerRoutes(
         stack: error instanceof Error ? error.stack : undefined
       });
       res.status(500).json({ error: "Failed to fetch live stats" });
+    }
+  });
+
+  // Parlay live stats endpoint - get live stats for each leg of active parlays
+  console.log('📊 [ROUTES] Registering /api/bets/parlay-live-stats endpoint');
+  app.get("/api/bets/parlay-live-stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      console.log(`\n📊 [API] Parlay live stats request from user: ${userId.substring(0, 8)}`);
+      
+      const bets = await storage.getAllBets(userId);
+      
+      // Filter to active parlays/teasers
+      const activeParlays = bets.filter((b: any) => {
+        if (b.status !== 'active') return false;
+        const betType = b.betType?.toLowerCase() || '';
+        return betType.includes('parlay') || betType.includes('teaser');
+      });
+      
+      console.log(`📊 [API] Found ${activeParlays.length} active parlay(s)`);
+      
+      // Get live stats for each parlay's legs
+      const parlayStats: { betId: string; legs: ParlayLegLiveStat[] }[] = [];
+      
+      for (const parlay of activeParlays) {
+        const legStats = await getParlayLegLiveStats(parlay);
+        parlayStats.push({
+          betId: parlay.id,
+          legs: legStats
+        });
+      }
+      
+      console.log(`✅ [API] Parlay stats completed for ${parlayStats.length} parlay(s)`);
+      
+      res.json(parlayStats);
+    } catch (error) {
+      console.error(`❌ [API] Parlay live stats error:`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      res.status(500).json({ error: "Failed to fetch parlay live stats" });
     }
   });
 

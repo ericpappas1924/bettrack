@@ -144,6 +144,14 @@ export default function SocialDashboard() {
 
   const { data: potdBets = [], isLoading: potdBetsLoading } = useQuery<BetWithUser[]>({
     queryKey: ["/api/potd/bets", selectedPotdCategory],
+    queryFn: async () => {
+      const url = selectedPotdCategory 
+        ? `/api/potd/bets?categoryId=${selectedPotdCategory}` 
+        : "/api/potd/bets";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch POTD bets");
+      return res.json();
+    },
   });
 
   const { data: potdStats } = useQuery<PotdStats>({
@@ -477,40 +485,57 @@ export default function SocialDashboard() {
             </TabsContent>
 
             <TabsContent value="potd" className="space-y-4">
-              {/* Overall Stats Card */}
-              {potdStats && (
-                <Card className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between gap-4 flex-wrap">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
-                          <Banknote className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              {/* Stats Card - Shows category stats when selected, otherwise community stats */}
+              {(() => {
+                const selectedCat = selectedPotdCategory ? potdCategories.find(c => c.id === selectedPotdCategory) : null;
+                const displayRecord = selectedCat 
+                  ? `${selectedCat.wins}-${selectedCat.losses}${selectedCat.pushes > 0 ? `-${selectedCat.pushes}` : ''}`
+                  : potdStats?.record;
+                const displayUnits = selectedCat 
+                  ? selectedCat.units.toFixed(2)
+                  : potdStats?.totalUnits;
+                const displayWinRate = selectedCat
+                  ? (selectedCat.wins + selectedCat.losses > 0 
+                      ? ((selectedCat.wins / (selectedCat.wins + selectedCat.losses)) * 100).toFixed(1)
+                      : '0')
+                  : potdStats?.winRate;
+                const displayTitle = selectedCat ? selectedCat.displayName : 'Plays of the Day';
+                const displaySubtitle = selectedCat ? 'Category stats' : 'Community picks';
+                
+                return (potdStats || selectedCat) && (
+                  <Card className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                            <Banknote className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-sm sm:text-base">{displayTitle}</h3>
+                            <p className="text-xs text-muted-foreground">{displaySubtitle}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-sm sm:text-base">Plays of the Day</h3>
-                          <p className="text-xs text-muted-foreground">Community picks</p>
+                        <div className="flex items-center gap-4 sm:gap-6">
+                          <div className="text-center">
+                            <p className="font-bold text-lg sm:text-xl tabular-nums">{displayRecord}</p>
+                            <p className="text-xs text-muted-foreground">Record</p>
+                          </div>
+                          <div className="text-center">
+                            <p className={`font-bold text-lg sm:text-xl tabular-nums ${parseFloat(displayUnits || '0') >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {parseFloat(displayUnits || '0') >= 0 ? '+' : ''}{displayUnits}u
+                            </p>
+                            <p className="text-xs text-muted-foreground">Units</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="font-bold text-lg sm:text-xl tabular-nums">{displayWinRate}%</p>
+                            <p className="text-xs text-muted-foreground">Win Rate</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <div className="text-center">
-                          <p className="font-bold text-lg sm:text-xl tabular-nums">{potdStats.record}</p>
-                          <p className="text-xs text-muted-foreground">Record</p>
-                        </div>
-                        <div className="text-center">
-                          <p className={`font-bold text-lg sm:text-xl tabular-nums ${parseFloat(potdStats.totalUnits) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {parseFloat(potdStats.totalUnits) >= 0 ? '+' : ''}{potdStats.totalUnits}u
-                          </p>
-                          <p className="text-xs text-muted-foreground">Units</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="font-bold text-lg sm:text-xl tabular-nums">{potdStats.winRate}%</p>
-                          <p className="text-xs text-muted-foreground">Win Rate</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* Category Filter */}
               <div className="flex items-center gap-2 flex-wrap">

@@ -920,6 +920,17 @@ export async function registerRoutes(
     }
   });
 
+  // Get a specific user's profit history over time
+  app.get("/api/social/users/:userId/profit-history", isAuthenticated, async (req: any, res) => {
+    try {
+      const history = await storage.getUserProfitHistory(req.params.userId);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching profit history:", error);
+      res.status(500).json({ error: "Failed to fetch profit history" });
+    }
+  });
+
   // Tail a bet - copy it to logged in user's tracker
   app.post("/api/bets/:id/tail", isAuthenticated, async (req: any, res) => {
     try {

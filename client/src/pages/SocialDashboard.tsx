@@ -24,7 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, CheckCircle2, Banknote, Trash2 } from "lucide-react";
+import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, CheckCircle2, Banknote, Trash2, LineChart } from "lucide-react";
+import { ResponsiveContainer, LineChart as RechartsLineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine } from "recharts";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -124,6 +125,7 @@ export default function SocialDashboard() {
   const [selectedPotdCategory, setSelectedPotdCategory] = useState<string | null>(null);
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [betToSettle, setBetToSettle] = useState<BetWithUser | null>(null);
+  const [profitChartUser, setProfitChartUser] = useState<UserType | null>(null);
 
   const { data: feed = [], isLoading: feedLoading } = useQuery<BetWithUser[]>({
     queryKey: ["/api/social/feed"],
@@ -156,6 +158,12 @@ export default function SocialDashboard() {
 
   const { data: potdStats } = useQuery<PotdStats>({
     queryKey: ["/api/potd/stats"],
+  });
+
+  type ProfitHistoryPoint = { date: string; profit: number; cumulativeProfit: number };
+  const { data: profitHistory = [], isLoading: profitHistoryLoading } = useQuery<ProfitHistoryPoint[]>({
+    queryKey: ["/api/social/users", profitChartUser?.id, "profit-history"],
+    enabled: !!profitChartUser,
   });
 
   const tailMutation = useMutation({
@@ -503,6 +511,18 @@ export default function SocialDashboard() {
                             </div>
                           )}
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProfitChartUser(entry.user);
+                          }}
+                          data-testid={`button-profit-chart-${entry.user.id}`}
+                        >
+                          <LineChart className="h-4 w-4" />
+                        </Button>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </div>
                     </CardContent>
@@ -995,6 +1015,93 @@ export default function SocialDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSettleDialogOpen(false)} data-testid="button-cancel-settle">
               Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profit History Chart Dialog */}
+      <Dialog open={!!profitChartUser} onOpenChange={(open) => !open && setProfitChartUser(null)}>
+        <DialogContent className="w-[95vw] sm:max-w-lg overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              <LineChart className="h-5 w-5" />
+              Profit Over Time
+            </DialogTitle>
+            <DialogDescription>
+              Cumulative profit history for {profitChartUser ? getUserDisplayName(profitChartUser) : 'user'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4">
+            {profitHistoryLoading ? (
+              <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : profitHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+                <TrendingUp className="h-12 w-12 mb-3" />
+                <p>No settled bets yet</p>
+                <p className="text-sm">Profit history will appear after settling bets</p>
+              </div>
+            ) : (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsLineChart data={profitHistory} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(value) => {
+                        const date = new Date(value);
+                        return `${date.getMonth() + 1}/${date.getDate()}`;
+                      }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(value) => `$${value}`}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload as { date: string; profit: number; cumulativeProfit: number };
+                          return (
+                            <div className="bg-popover border rounded-lg p-3 shadow-lg">
+                              <p className="text-sm font-medium">{new Date(data.date).toLocaleDateString()}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Daily: <span className={data.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  {data.profit >= 0 ? '+' : ''}${data.profit.toFixed(2)}
+                                </span>
+                              </p>
+                              <p className="text-sm font-medium">
+                                Total: <span className={data.cumulativeProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                  {data.cumulativeProfit >= 0 ? '+' : ''}${data.cumulativeProfit.toFixed(2)}
+                                </span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+                    <Line 
+                      type="monotone" 
+                      dataKey="cumulativeProfit" 
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                      dot={{ fill: 'hsl(var(--primary))', strokeWidth: 0, r: 3 }}
+                      activeDot={{ r: 5, strokeWidth: 0 }}
+                    />
+                  </RechartsLineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-shrink-0">
+            <Button variant="outline" onClick={() => setProfitChartUser(null)} data-testid="button-close-profit-chart">
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

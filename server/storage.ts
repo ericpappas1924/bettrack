@@ -44,6 +44,7 @@ export interface IStorage {
   getLeaderboard(): Promise<LeaderboardEntry[]>;
   getUserPublicBets(userId: string): Promise<BetWithUser[]>;
   getUserActiveBets(userId: string): Promise<BetWithUser[]>;
+  getUserProfitHistory(userId: string): Promise<{ date: string; profit: number; cumulativeProfit: number }[]>;
   
   // Play of the Day features
   getPotdCategories(): Promise<PotdCategory[]>;
@@ -203,6 +204,39 @@ export class DatabaseStorage implements IStorage {
       ...row.bets,
       user: row.users
     }));
+  }
+  
+  async getUserProfitHistory(userId: string): Promise<{ date: string; profit: number; cumulativeProfit: number }[]> {
+    // Get all settled bets for this user ordered by settled date
+    const settledBets = await db
+      .select()
+      .from(bets)
+      .where(and(eq(bets.userId, userId), eq(bets.status, 'settled')))
+      .orderBy(bets.settledAt);
+    
+    // Group by date and calculate daily/cumulative profit
+    const dailyProfits = new Map<string, number>();
+    
+    for (const bet of settledBets) {
+      const date = bet.settledAt 
+        ? new Date(bet.settledAt).toISOString().split('T')[0]
+        : new Date(bet.createdAt).toISOString().split('T')[0];
+      const profit = bet.profit ? parseFloat(bet.profit) : 0;
+      dailyProfits.set(date, (dailyProfits.get(date) || 0) + profit);
+    }
+    
+    // Convert to array with cumulative profit
+    const result: { date: string; profit: number; cumulativeProfit: number }[] = [];
+    let cumulative = 0;
+    
+    const sortedDates = Array.from(dailyProfits.keys()).sort();
+    for (const date of sortedDates) {
+      const profit = dailyProfits.get(date) || 0;
+      cumulative += profit;
+      result.push({ date, profit, cumulativeProfit: cumulative });
+    }
+    
+    return result;
   }
   
   // Play of the Day features

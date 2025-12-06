@@ -52,7 +52,9 @@ export interface IStorage {
   updatePotdCategory(id: string, updates: Partial<PotdCategory>): Promise<PotdCategory | undefined>;
   getPotdBets(categoryId?: string): Promise<BetWithUser[]>;
   markBetAsPotd(betId: string, categoryId: string, userId: string): Promise<Bet | undefined>;
+  removeBetFromPotd(betId: string): Promise<Bet | undefined>;
   updatePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined>;
+  reversePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined>;
   seedPotdCategories(): Promise<void>;
 }
 
@@ -258,6 +260,19 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
   
+  async removeBetFromPotd(betId: string): Promise<Bet | undefined> {
+    const [result] = await db
+      .update(bets)
+      .set({
+        playOfDayCategory: null,
+        markedAsPotdAt: null,
+        markedAsPotdBy: null
+      })
+      .where(eq(bets.id, betId))
+      .returning();
+    return result;
+  }
+  
   async updatePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined> {
     const category = await this.getPotdCategory(categoryId);
     if (!category) return undefined;
@@ -285,6 +300,34 @@ export class DatabaseStorage implements IStorage {
       pushes,
       units: newUnits,
       streak: newStreak
+    });
+  }
+  
+  async reversePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined> {
+    const category = await this.getPotdCategory(categoryId);
+    if (!category) return undefined;
+    
+    let wins = category.wins;
+    let losses = category.losses;
+    let pushes = category.pushes;
+    let newUnits = category.units - units; // Subtract the units that were added
+    
+    if (result === 'won') {
+      wins = Math.max(0, wins - 1);
+    } else if (result === 'lost') {
+      losses = Math.max(0, losses - 1);
+    } else {
+      pushes = Math.max(0, pushes - 1);
+    }
+    
+    // Note: We can't reliably reverse the streak, so we leave it as-is
+    // or reset to 0 if this is a significant change
+    
+    return await this.updatePotdCategory(categoryId, {
+      wins,
+      losses,
+      pushes,
+      units: newUnits,
     });
   }
   

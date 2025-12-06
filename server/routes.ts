@@ -1026,6 +1026,47 @@ export async function registerRoutes(
     }
   });
 
+  // Remove a bet from Play of the Day
+  // NOTE: By design, any authenticated user can remove POTD bets.
+  // If the bet was settled, this reverses the category stats.
+  app.delete("/api/potd/bets/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      
+      if (!existingBet.playOfDayCategory) {
+        return res.status(400).json({ error: "This bet is not a Play of the Day" });
+      }
+      
+      const categoryId = existingBet.playOfDayCategory;
+      
+      // If the bet was settled as POTD, reverse the category stats
+      if (existingBet.status === 'settled' && existingBet.result) {
+        const odds = parseFloat(existingBet.openingOdds);
+        if (!isNaN(odds) && odds !== 0) {
+          let units = 0;
+          if (existingBet.result === 'won') {
+            units = odds < 0 ? 1 : odds / 100; // winUnits
+          } else if (existingBet.result === 'lost') {
+            units = odds < 0 ? Math.abs(odds) / 100 : 1; // riskUnits (but negative in stats)
+            units = -units; // Stats stored negative for losses, so reverse is positive
+          }
+          await storage.reversePotdCategoryStats(categoryId, existingBet.result as 'won' | 'lost' | 'push', units);
+        }
+      }
+      
+      // Remove the bet from POTD (keeps the bet, just removes POTD association)
+      const updatedBet = await storage.removeBetFromPotd(req.params.id);
+      
+      res.json(updatedBet);
+    } catch (error) {
+      console.error("Error removing bet from POTD:", error);
+      res.status(500).json({ error: "Failed to remove bet from POTD" });
+    }
+  });
+
   // Settle a POTD bet
   // NOTE: By design, any authenticated user can settle POTD bets.
   // This is a community-driven feature where the community self-manages picks.

@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, CheckCircle2, Banknote } from "lucide-react";
+import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, CheckCircle2, Banknote, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -204,6 +204,27 @@ export default function SocialDashboard() {
     },
   });
 
+  const removePotdMutation = useMutation({
+    mutationFn: async (betId: string) => {
+      const res = await apiRequest("DELETE", `/api/potd/bets/${betId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/bets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/stats"] });
+      toast({ title: "Removed from POTD", description: "The bet has been removed from Plays of the Day" });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Failed to remove", description: error.message, variant: "destructive" });
+    },
+  });
+
   const getUserInitials = (u: UserType | null | undefined) => {
     if (u?.firstName && u?.lastName) {
       return `${u.firstName[0]}${u.lastName[0]}`.toUpperCase();
@@ -256,6 +277,12 @@ export default function SocialDashboard() {
   const handleConfirmSettle = (result: 'won' | 'lost' | 'push') => {
     if (betToSettle) {
       settlePotdMutation.mutate({ betId: betToSettle.id, result });
+    }
+  };
+
+  const handleRemovePotd = (bet: BetWithUser) => {
+    if (confirm("Remove this bet from Play of the Day? If it was settled, the category stats will be reversed.")) {
+      removePotdMutation.mutate(bet.id);
     }
   };
 
@@ -641,6 +668,7 @@ export default function SocialDashboard() {
                       currentUserId={user?.id}
                       onTail={handleTailClick}
                       onSettle={handleSettlePotd}
+                      onRemove={handleRemovePotd}
                       onViewDetails={handleViewDetails}
                       formatOdds={formatOdds}
                       getUserInitials={getUserInitials}
@@ -664,6 +692,7 @@ export default function SocialDashboard() {
                         currentUserId={user?.id}
                         onTail={handleTailClick}
                         onSettle={handleSettlePotd}
+                        onRemove={handleRemovePotd}
                         onViewDetails={handleViewDetails}
                         formatOdds={formatOdds}
                         getUserInitials={getUserInitials}
@@ -981,6 +1010,7 @@ function PotdBetCard({
   currentUserId,
   onTail,
   onSettle,
+  onRemove,
   onViewDetails,
   formatOdds,
   getUserInitials,
@@ -991,6 +1021,7 @@ function PotdBetCard({
   currentUserId?: string;
   onTail: (bet: BetWithUser) => void;
   onSettle: (bet: BetWithUser) => void;
+  onRemove: (bet: BetWithUser) => void;
   onViewDetails?: (bet: BetWithUser) => void;
   formatOdds: (odds: string) => string;
   getUserInitials: (u: UserType) => string;
@@ -1109,6 +1140,19 @@ function PotdBetCard({
                 {bet.result || bet.status}
               </Badge>
             )}
+            
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(bet);
+              }}
+              data-testid={`button-remove-potd-${bet.id}`}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
           </div>
         </div>
       </CardContent>

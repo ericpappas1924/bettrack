@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { parseBetPaste, convertToAppBet, type ParsedBet, type ParseResult } from "@/lib/betParser";
-import { Upload, Check, AlertCircle, AlertTriangle } from "lucide-react";
+import { Upload, Check, AlertCircle, AlertTriangle, Link2 } from "lucide-react";
 
 interface ImportBetsDialogProps {
   open: boolean;
@@ -20,13 +20,87 @@ interface ImportBetsDialogProps {
   onImport: (bets: ReturnType<typeof convertToAppBet>[]) => void;
 }
 
+// Check if input looks like a DraftKings ticket URL
+function isDraftKingsUrl(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.includes('draftkings.com') && trimmed.includes('ticket');
+}
+
+// Extract ticket ID from DraftKings URL
+function extractDKTicketId(text: string): string | null {
+  const hashMatch = text.match(/ticket#(\d+)/);
+  if (hashMatch) return hashMatch[1];
+  
+  const pathMatch = text.match(/\/tickets?\/(\d+)/);
+  if (pathMatch) return pathMatch[1];
+  
+  return null;
+}
+
 export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDialogProps) {
   const [pasteText, setPasteText] = useState("");
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [step, setStep] = useState<'paste' | 'preview'>('paste');
+  const [isLoading, setIsLoading] = useState(false);
+  const [dkTicketInfo, setDkTicketInfo] = useState<any>(null);
 
-  const handleParse = () => {
+  // Detect if current input is a DraftKings URL
+  const isDKInput = isDraftKingsUrl(pasteText);
+
+  const handleParse = async () => {
+    // Check if this is a DraftKings ticket URL
+    if (isDKInput) {
+      setIsLoading(true);
+      setParseError(null);
+      
+      try {
+        const response = await fetch('/api/bets/import-dk-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: pasteText.trim() }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          setParseError(data.message || data.error || 'Failed to import DraftKings ticket');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Store ticket info for display
+        setDkTicketInfo(data.ticket);
+        
+        // Convert imported bets to ParseResult format for preview
+        const parsedBets: ParsedBet[] = data.imported.map((bet: any) => ({
+          id: bet.id,
+          sport: bet.sport,
+          betType: bet.betType,
+          description: bet.team,
+          game: bet.game,
+          odds: parseInt(bet.openingOdds) || 0,
+          stake: parseFloat(bet.stake),
+          potentialWin: parseFloat(bet.potentialWin),
+          status: bet.status === 'active' ? 'pending' : (bet.result || 'pending'),
+          date: bet.gameStartTime ? new Date(bet.gameStartTime) : new Date(),
+          gameStartTime: bet.gameStartTime ? new Date(bet.gameStartTime) : null,
+          isLive: false,
+          isFreePlay: bet.isFreePlay,
+          legs: bet.notes?.split('\n').filter((l: string) => l.startsWith('[')) || undefined,
+        }));
+        
+        setParseResult({ bets: parsedBets, errors: [] });
+        setStep('preview');
+      } catch (e: any) {
+        setParseError(e.message || 'Failed to fetch DraftKings ticket');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    
+    // Standard parsing for non-DK input
     try {
       const result = parseBetPaste(pasteText);
       if (result.bets.length === 0 && result.errors.length === 0) {
@@ -43,6 +117,16 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
 
   const handleImport = () => {
     if (!parseResult) return;
+    
+    // For DK imports, bets are already saved to DB, just close dialog
+    if (dkTicketInfo) {
+      handleClose();
+      // Trigger a refetch of bets
+      window.location.reload();
+      return;
+    }
+    
+    // For standard imports, convert and pass to parent
     const appBets = parseResult.bets.map(convertToAppBet);
     onImport(appBets);
     handleClose();
@@ -52,7 +136,9 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
     setPasteText("");
     setParseResult(null);
     setParseError(null);
+    setDkTicketInfo(null);
     setStep('paste');
+    setIsLoading(false);
     onOpenChange(false);
   };
 
@@ -85,12 +171,21 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
         {step === 'paste' ? (
           <div className="space-y-4 flex-1">
             <Textarea
-              placeholder="Paste your bet history here..."
+              placeholder="Paste your bet history here, or a DraftKings ticket URL..."
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               className="min-h-[250px] sm:min-h-[300px] font-mono text-xs sm:text-sm"
               data-testid="textarea-paste-bets"
             />
+            {isDKInput && (
+              <Alert>
+                <Link2 className="h-4 w-4" />
+                <AlertTitle>DraftKings Ticket Detected</AlertTitle>
+                <AlertDescription className="text-xs">
+                  We'll fetch your bet details directly from DraftKings. This includes Round Robin and parlay bets.
+                </AlertDescription>
+              </Alert>
+            )}
             {parseError && (
               <div className="flex items-center gap-2 text-destructive text-sm">
                 <AlertCircle className="h-4 w-4" />
@@ -100,6 +195,23 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
           </div>
         ) : (
           <div className="flex-1 flex flex-col gap-4">
+            {/* Show DK ticket info if imported from DraftKings */}
+            {dkTicketInfo && (
+              <Alert className="bg-green-50 dark:bg-green-950/20 border-green-500">
+                <Check className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-800 dark:text-green-200">DraftKings Ticket Imported</AlertTitle>
+                <AlertDescription className="text-xs text-green-700 dark:text-green-300">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                    <span>Ticket ID:</span> <span className="font-mono">{dkTicketInfo.ticketId}</span>
+                    <span>Status:</span> <span>{dkTicketInfo.status}</span>
+                    <span>Total Stake:</span> <span>{dkTicketInfo.totalStake}</span>
+                    <span>Potential Payout:</span> <span>{dkTicketInfo.totalPayout}</span>
+                    <span>Placed At:</span> <span>{dkTicketInfo.betshop}</span>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Show parse errors if any */}
             {parseErrors.length > 0 && (
               <Alert variant="destructive">
@@ -215,17 +327,31 @@ export function ImportBetsDialog({ open, onOpenChange, onImport }: ImportBetsDia
           {step === 'paste' ? (
             <Button 
               onClick={handleParse} 
-              disabled={!pasteText.trim()}
+              disabled={!pasteText.trim() || isLoading}
               data-testid="button-parse-bets"
               className="w-full sm:w-auto"
             >
-              <Upload className="h-4 w-4 mr-2" />
-              Parse Bets
+              {isLoading ? (
+                <>
+                  <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Importing...
+                </>
+              ) : isDKInput ? (
+                <>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Import from DraftKings
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Parse Bets
+                </>
+              )}
             </Button>
           ) : (
             <Button onClick={handleImport} data-testid="button-import-bets" className="w-full sm:w-auto">
               <Check className="h-4 w-4 mr-2" />
-              Import {parsedBets.length}
+              {dkTicketInfo ? 'Done' : `Import ${parsedBets.length}`}
             </Button>
           )}
         </DialogFooter>

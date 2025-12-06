@@ -388,6 +388,239 @@ async function trackNBABet(
 }
 
 /**
+ * Track NCAAB (College Basketball) bet using BALLDONTLIE NCAAB API
+ */
+async function trackNCAABBet(
+  bet: any,
+  betDetails: any,
+  team1: string,
+  team2: string
+): Promise<LiveStatProgress | null> {
+  const betId = bet.id.substring(0, 8);
+  
+  try {
+    console.log(`🔍 [NCAAB-TRACKER] Looking up game:`, { betId, team1, team2 });
+    
+    // Find the NCAAB game
+    const game = await ballDontLie.findNCAABGameByTeams(team1, team2);
+    if (!game) {
+      console.error(`❌ [NCAAB-TRACKER] Game not found:`, {
+        betId,
+        team1,
+        team2
+      });
+      return null;
+    }
+    
+    console.log(`✅ [NCAAB-TRACKER] Game found:`, {
+      betId,
+      gameId: game.id,
+      matchup: `${game.visitor_team.full_name} @ ${game.home_team.full_name}`,
+      score: `${game.visitor_team_score}-${game.home_team_score}`
+    });
+    
+    // Get current scores
+    const awayScore = game.visitor_team_score;
+    const homeScore = game.home_team_score;
+    const gameStatus = ballDontLie.getGameStatusMessage(game);
+    const isLive = ballDontLie.isGameLive(game);
+    const isComplete = ballDontLie.isGameCompleted(game);
+    
+    console.log(`   📊 Score: ${game.visitor_team.full_name} ${awayScore}, ${game.home_team.full_name} ${homeScore} (${gameStatus})`);
+    
+    // Base response
+    const baseResponse: LiveStatProgress = {
+      betId: bet.id,
+      gameId: String(game.id),
+      sport: bet.sport,
+      betType: betDetails.betType,
+      awayTeam: game.visitor_team.full_name,
+      homeTeam: game.home_team.full_name,
+      awayScore,
+      homeScore,
+      gameStatus,
+      isLive,
+      isComplete,
+      isWinning: false,
+      lastUpdated: new Date(),
+    };
+    
+    // Calculate bet status based on type
+    switch (betDetails.betType) {
+      case 'Straight': {
+        // Moneyline or Spread
+        const betTeam = betDetails.team || bet.team || '';
+        const betTeamNorm = betTeam.toUpperCase().replace(/[^A-Z]/g, '');
+        const homeTeamNorm = game.home_team.full_name.toUpperCase().replace(/[^A-Z]/g, '');
+        const awayTeamNorm = game.visitor_team.full_name.toUpperCase().replace(/[^A-Z]/g, '');
+        
+        const isBettingHome = homeTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(homeTeamNorm);
+        const isBettingAway = awayTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(awayTeamNorm);
+        
+        // Check if this is a spread bet (has +/- number in bet team)
+        const spreadMatch = betTeam.match(/([+-]?\d+\.?\d*)/);
+        const spread = spreadMatch ? parseFloat(spreadMatch[1]) : 0;
+        
+        let isWinning = false;
+        if (spread !== 0) {
+          // Spread bet
+          if (isBettingHome) {
+            isWinning = (homeScore + spread) > awayScore;
+          } else if (isBettingAway) {
+            isWinning = (awayScore + spread) > homeScore;
+          }
+          console.log(`   💰 Spread ${spread}: ${betTeam} ${isWinning ? 'COVERING' : 'NOT COVERING'}`);
+        } else {
+          // Moneyline
+          if (isBettingHome) {
+            isWinning = homeScore > awayScore;
+          } else if (isBettingAway) {
+            isWinning = awayScore > homeScore;
+          }
+          console.log(`   💰 Moneyline: Betting on ${betTeam}, ${isWinning ? 'WINNING' : 'LOSING'}`);
+        }
+        
+        return {
+          ...baseResponse,
+          betTeam,
+          betLine: spread,
+          isWinning,
+          currentScore: `${game.visitor_team.name} ${awayScore} - ${game.home_team.name} ${homeScore}`,
+        };
+      }
+      
+      case 'Spread': {
+        const betTeam = betDetails.team || '';
+        const spread = betDetails.spread || 0;
+        
+        const betTeamNorm = betTeam.toUpperCase().replace(/[^A-Z]/g, '');
+        const homeTeamNorm = game.home_team.full_name.toUpperCase().replace(/[^A-Z]/g, '');
+        const awayTeamNorm = game.visitor_team.full_name.toUpperCase().replace(/[^A-Z]/g, '');
+        
+        const isBettingHome = homeTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(homeTeamNorm);
+        const isBettingAway = awayTeamNorm.includes(betTeamNorm) || betTeamNorm.includes(awayTeamNorm);
+        
+        let isWinning = false;
+        if (isBettingHome) {
+          isWinning = (homeScore + spread) > awayScore;
+        } else if (isBettingAway) {
+          isWinning = (awayScore + spread) > homeScore;
+        }
+        
+        console.log(`   💰 Spread ${spread}: ${betTeam} ${isWinning ? 'COVERING' : 'NOT COVERING'}`);
+        
+        return {
+          ...baseResponse,
+          betTeam,
+          betLine: spread,
+          isWinning,
+          currentScore: `${game.visitor_team.name} ${awayScore} - ${game.home_team.name} ${homeScore}`,
+        };
+      }
+      
+      case 'Total': {
+        const totalLine = betDetails.total || 0;
+        const isOver = betDetails.isOver || false;
+        const combinedScore = awayScore + homeScore;
+        
+        const isWinning = isOver 
+          ? combinedScore > totalLine 
+          : combinedScore < totalLine;
+        
+        console.log(`   💰 ${isOver ? 'Over' : 'Under'} ${totalLine}: Combined ${combinedScore}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
+        
+        return {
+          ...baseResponse,
+          totalLine,
+          isOver,
+          isWinning,
+          currentScore: `${game.visitor_team.name} ${awayScore} - ${game.home_team.name} ${homeScore} (Total: ${combinedScore})`,
+        };
+      }
+      
+      case 'Player Prop': {
+        console.log(`📊 [NCAAB-TRACKER] Fetching box score for player prop:`, {
+          betId,
+          playerName: betDetails.playerName,
+          statType: betDetails.statType,
+          target: betDetails.targetValue
+        });
+        
+        // Get full box score with ALL players
+        const boxScore = await ballDontLie.fetchNCAABBoxScore(game.id, game.date);
+        if (!boxScore) {
+          console.error(`❌ [NCAAB-TRACKER] No box score available:`, {
+            betId,
+            gameId: game.id,
+            date: game.date
+          });
+          return null;
+        }
+        
+        const totalPlayers = boxScore.home_team.players.length + boxScore.visitor_team.players.length;
+        console.log(`✅ [NCAAB-TRACKER] Box score loaded:`, {
+          betId,
+          totalPlayers,
+          home: boxScore.home_team.players.length,
+          visitor: boxScore.visitor_team.players.length
+        });
+        
+        // Extract player stat from BALLDONTLIE box score
+        const currentValue = ballDontLie.extractPlayerStat(
+          boxScore,
+          betDetails.playerName || '',
+          betDetails.statType || ''
+        );
+        
+        // If player stat not found, return null to prevent false settlement
+        if (currentValue === null || currentValue === undefined) {
+          console.error(`❌ [NCAAB-TRACKER] Player stat not found:`, {
+            betId,
+            player: betDetails.playerName,
+            stat: betDetails.statType
+          });
+          return null;
+        }
+        
+        const targetValue = betDetails.targetValue || 0;
+        const isOver = betDetails.isOver || false;
+        
+        const isWinning = isOver 
+          ? currentValue >= targetValue 
+          : currentValue <= targetValue;
+        
+        let progress = 0;
+        if (isOver) {
+          progress = Math.min(100, (currentValue / targetValue) * 100);
+        } else {
+          progress = currentValue <= targetValue ? 100 : 0;
+        }
+        
+        console.log(`   💰 ${betDetails.playerName} ${isOver ? 'Over' : 'Under'} ${targetValue}: Current ${currentValue}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
+        
+        return {
+          ...baseResponse,
+          playerName: betDetails.playerName,
+          statType: betDetails.statType,
+          targetValue,
+          currentValue,
+          progress: Math.round(progress),
+          isOver,
+          isWinning,
+        };
+      }
+      
+      default:
+        console.log(`   ⚠️  Unknown bet type: ${betDetails.betType}`);
+        return baseResponse;
+    }
+  } catch (error) {
+    console.error(`   ❌ Error tracking NCAAB bet:`, error);
+    return null;
+  }
+}
+
+/**
  * Track NFL bet using NFL API (Tank01 Real-Time Stats)
  */
 async function trackNFLBet(
@@ -756,6 +989,12 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
   if (bet.sport === 'NBA') {
     console.log(`🏀 [TRACKER] Routing to BALLDONTLIE for NBA bet ${betId}`);
     return trackNBABet(bet, betDetails, team1, team2);
+  }
+  
+  // ========== NCAAB: Use BALLDONTLIE NCAAB API ==========
+  if (bet.sport === 'NCAAB') {
+    console.log(`🏀 [TRACKER] Routing to BALLDONTLIE (NCAAB) for college basketball bet ${betId}`);
+    return trackNCAABBet(bet, betDetails, team1, team2);
   }
   
   // ========== NFL: Use NFL API ==========

@@ -762,3 +762,263 @@ export async function findNBAPlayerPropFromBallDontLie(
   };
 }
 
+
+// ============================================================
+// NCAAB (College Basketball) Support
+// Uses same BALLDONTLIE API with /ncaab/v1/ endpoint prefix
+// ============================================================
+
+/**
+ * Fetch NCAAB games for a specific date
+ * Cached for 2 minutes
+ */
+export const fetchNCAABGames = memoize(
+  async (date: string): Promise<BallDontLieGame[]> => {
+    console.log(`🔍 [BALLDONTLIE] fetchNCAABGames:`, { date });
+    
+    try {
+      const data = await makeRequest('/ncaab/v1/games', {
+        'start_date': date,
+        'end_date': date,
+      });
+      
+      if (data && data.data && Array.isArray(data.data)) {
+        console.log(`✅ [BALLDONTLIE] Found NCAAB games:`, { date, count: data.data.length });
+        return data.data;
+      }
+      
+      console.warn(`⚠️  [BALLDONTLIE] No NCAAB games found:`, { date });
+      return [];
+    } catch (error) {
+      console.error(`❌ [BALLDONTLIE] fetchNCAABGames failed:`, {
+        date,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return [];
+    }
+  },
+  { maxAge: 2 * 60 * 1000 } // Cache for 2 minutes
+);
+
+/**
+ * Fetch NCAAB box score with player stats
+ * Cached for 30 seconds for live games
+ * 
+ * @param gameId - The game ID
+ * @param date - The game date in YYYY-MM-DD format (required by API)
+ */
+export const fetchNCAABBoxScore = memoize(
+  async (gameId: string | number, date: string): Promise<BallDontLieBoxScore | null> => {
+    console.log(`📊 [BALLDONTLIE] fetchNCAABBoxScore:`, { gameId, date });
+    
+    try {
+      const data = await makeRequest('/ncaab/v1/box_scores', {
+        'game_ids': [String(gameId)],
+        'date': date,
+      });
+      
+      if (data && data.data && Array.isArray(data.data) && data.data.length > 0) {
+        console.log(`📦 [BALLDONTLIE] Received ${data.data.length} NCAAB box score(s) for date ${date}`);
+        
+        // Filter by game_id to get the correct game
+        const boxScore = data.data.find((bs: any) => bs.id === Number(gameId));
+        
+        if (!boxScore) {
+          console.error(`❌ [BALLDONTLIE] NCAAB Game ID ${gameId} not found in response!`);
+          return null;
+        }
+        
+        const totalPlayers = boxScore.home_team.players.length + boxScore.visitor_team.players.length;
+        console.log(`✅ [BALLDONTLIE] NCAAB Box score received:`, {
+          gameId,
+          home: boxScore.home_team.full_name,
+          homePlayers: boxScore.home_team.players.length,
+          visitor: boxScore.visitor_team.full_name,
+          visitorPlayers: boxScore.visitor_team.players.length,
+          totalPlayers
+        });
+        return boxScore;
+      }
+      
+      console.warn(`⚠️  [BALLDONTLIE] No NCAAB box score data:`, { gameId, date });
+      return null;
+    } catch (error) {
+      console.error(`❌ [BALLDONTLIE] fetchNCAABBoxScore failed:`, {
+        gameId,
+        date,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return null;
+    }
+  },
+  { maxAge: 30 * 1000 } // Cache for 30 seconds
+);
+
+/**
+ * Find NCAAB game by team names
+ * Searches games for today and next 3 days (college games often scheduled ahead)
+ */
+export async function findNCAABGameByTeams(
+  team1: string,
+  team2: string
+): Promise<BallDontLieGame | null> {
+  console.log(`🔍 [BALLDONTLIE] findNCAABGameByTeams:`, { team1, team2 });
+  
+  // Normalize team names for comparison - college teams have more variations
+  const normalizeTeam = (name: string) => 
+    name.toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .replace(/UNIVERSITY/, '')
+      .replace(/COLLEGE/, '')
+      .replace(/STATE/, 'ST')
+      .replace(/NORTHERN/, 'N')
+      .replace(/SOUTHERN/, 'S')
+      .replace(/EASTERN/, 'E')
+      .replace(/WESTERN/, 'W')
+      .replace(/CENTRAL/, 'C');
+  
+  const team1Norm = normalizeTeam(team1);
+  const team2Norm = normalizeTeam(team2);
+  
+  console.log(`   [BALLDONTLIE] Normalized NCAAB teams:`, { team1Norm, team2Norm });
+  
+  try {
+    // Search today and next 3 days (college games often scheduled ahead)
+    const dates: string[] = [];
+    for (let i = -1; i <= 3; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    
+    console.log(`   [BALLDONTLIE] Searching dates:`, { dates });
+    
+    for (const date of dates) {
+      const games = await fetchNCAABGames(date);
+      
+      for (const game of games) {
+        const homeNorm = normalizeTeam(game.home_team.full_name);
+        const visitorNorm = normalizeTeam(game.visitor_team.full_name);
+        
+        // Check if both teams match (in either order)
+        const matchesTeams = (
+          (homeNorm.includes(team1Norm) || team1Norm.includes(homeNorm)) &&
+          (visitorNorm.includes(team2Norm) || team2Norm.includes(visitorNorm))
+        ) || (
+          (homeNorm.includes(team2Norm) || team2Norm.includes(homeNorm)) &&
+          (visitorNorm.includes(team1Norm) || team1Norm.includes(visitorNorm))
+        );
+        
+        if (matchesTeams) {
+          console.log(`✅ [BALLDONTLIE] NCAAB Game found:`, {
+            gameId: game.id,
+            matchup: `${game.visitor_team.full_name} @ ${game.home_team.full_name}`,
+            score: `${game.visitor_team_score}-${game.home_team_score}`,
+            date: game.date,
+            status: getGameStatusMessage(game)
+          });
+          return game;
+        }
+      }
+    }
+    
+    console.warn(`⚠️  [BALLDONTLIE] No NCAAB game found:`, { team1, team2, datesSearched: dates });
+    return null;
+  } catch (error) {
+    console.error(`❌ [BALLDONTLIE] findNCAABGameByTeams failed:`, {
+      team1,
+      team2,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  }
+}
+
+/**
+ * Track an NCAAB spread bet
+ * Returns live score and win/loss status
+ */
+export async function trackNCAABSpreadBet(
+  team1: string,
+  team2: string,
+  betOnTeam: string,
+  spread: number
+): Promise<{
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  isLive: boolean;
+  isComplete: boolean;
+  gameStatus: string;
+  isWinning: boolean;
+  currentMargin: number;
+  spreadNeeded: number;
+} | null> {
+  console.log(`🏀 [BALLDONTLIE] trackNCAABSpreadBet:`, { team1, team2, betOnTeam, spread });
+  
+  const game = await findNCAABGameByTeams(team1, team2);
+  if (!game) {
+    console.warn(`❌ Could not find NCAAB game for ${team1} vs ${team2}`);
+    return null;
+  }
+  
+  const gameDate = game.date.split('T')[0];
+  const boxScore = await fetchNCAABBoxScore(game.id, gameDate);
+  
+  // Determine which team was bet on
+  const betOnHome = normalizeTeamName(betOnTeam).includes(normalizeTeamName(game.home_team.name)) ||
+                    normalizeTeamName(game.home_team.name).includes(normalizeTeamName(betOnTeam));
+  
+  const homeScore = boxScore?.home_team_score ?? game.home_team_score;
+  const awayScore = boxScore?.visitor_team_score ?? game.visitor_team_score;
+  
+  // Calculate margin from bet perspective
+  // If bet is home -2.5, home needs to win by more than 2.5
+  // If bet is away +2.5, away needs to lose by less than 2.5 (or win)
+  const currentMargin = betOnHome ? (homeScore - awayScore) : (awayScore - homeScore);
+  const spreadNeeded = -spread; // Spread is stored as -2.5 for favorite, need to win by more than 2.5
+  
+  // Determine if winning
+  const isWinning = currentMargin > spreadNeeded;
+  
+  // Determine game status
+  const status = boxScore?.status || game.status || '';
+  const isComplete = status.toLowerCase() === 'final' || status.toLowerCase().includes('final');
+  const isLive = !isComplete && (homeScore > 0 || awayScore > 0);
+  
+  const gameStatus = isComplete ? 'Final' : 
+                     isLive ? `${boxScore?.period || 'Live'}` : 
+                     'Not Started';
+  
+  console.log(`✅ [BALLDONTLIE] NCAAB bet status:`, {
+    matchup: `${game.visitor_team.name} @ ${game.home_team.name}`,
+    score: `${awayScore}-${homeScore}`,
+    betOn: betOnHome ? game.home_team.name : game.visitor_team.name,
+    spread,
+    currentMargin,
+    isWinning,
+    gameStatus
+  });
+  
+  return {
+    homeTeam: game.home_team.full_name,
+    awayTeam: game.visitor_team.full_name,
+    homeScore,
+    awayScore,
+    isLive,
+    isComplete,
+    gameStatus,
+    isWinning,
+    currentMargin,
+    spreadNeeded
+  };
+}
+
+/**
+ * Helper to normalize team names for comparison
+ */
+function normalizeTeamName(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+

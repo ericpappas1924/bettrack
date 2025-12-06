@@ -9,6 +9,7 @@ import { trackMultipleBets, autoSettleCompletedBets } from "./services/liveStatT
 import { getParlayLegLiveStats, type ParlayLegLiveStat } from "./services/parlayTracker";
 import { batchFindGameStartTimes } from "./services/oddsApi";
 import { getGameStatus, GAME_STATUS, type Sport } from "@shared/betTypes";
+import { fetchDKTicket, convertDKTicketToBets, extractTicketId, isDraftKingsInput } from "./services/draftkingsApi";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -200,6 +201,85 @@ export async function registerRoutes(
       }
       console.error("Error creating bet:", error);
       res.status(500).json({ error: "Failed to create bet" });
+    }
+  });
+
+  // DraftKings Ticket Import - import from DK retail ticket URL
+  app.post("/api/bets/import-dk-ticket", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { url } = req.body;
+      
+      console.log(`\n========== DK TICKET IMPORT STARTED ==========`);
+      console.log(`User: ${userId.substring(0, 8)}`);
+      console.log(`Input: ${url}`);
+      
+      // Extract ticket ID from URL or direct ID
+      const ticketId = extractTicketId(url);
+      if (!ticketId) {
+        console.error(`❌ [DK-IMPORT] Invalid ticket URL/ID: ${url}`);
+        return res.status(400).json({ 
+          error: 'Invalid DraftKings ticket URL or ID',
+          message: 'Please provide a valid DraftKings retail ticket URL or ticket ID'
+        });
+      }
+      
+      console.log(`📡 [DK-IMPORT] Fetching ticket: ${ticketId}`);
+      
+      // Fetch ticket from DraftKings API
+      const ticket = await fetchDKTicket(ticketId);
+      
+      // Convert to our bet format
+      const convertedBets = convertDKTicketToBets(ticket);
+      
+      console.log(`✅ [DK-IMPORT] Converted ${convertedBets.length} bet(s)`);
+      
+      // Add user ID and prepare for database
+      const betsToInsert = convertedBets.map(bet => ({
+        ...bet,
+        userId,
+        createdAt: new Date(),
+      }));
+      
+      // Insert into database
+      const insertedBets = [];
+      for (const bet of betsToInsert) {
+        try {
+          const inserted = await storage.createBet(bet);
+          insertedBets.push(inserted);
+          console.log(`✅ [DK-IMPORT] Inserted bet: ${inserted.id.substring(0, 8)} - ${bet.team}`);
+        } catch (err: any) {
+          // Check for duplicate (external ID already exists)
+          if (err.message?.includes('duplicate') || err.code === '23505') {
+            console.log(`⚠️  [DK-IMPORT] Skipping duplicate: ${bet.externalId}`);
+          } else {
+            console.error(`❌ [DK-IMPORT] Failed to insert bet:`, err);
+          }
+        }
+      }
+      
+      console.log(`========== DK TICKET IMPORT COMPLETE ==========`);
+      console.log(`✅ Imported ${insertedBets.length} of ${convertedBets.length} bet(s)`);
+      
+      res.status(201).json({
+        imported: insertedBets,
+        ticket: {
+          ticketId: ticket.ticketId,
+          status: ticket.ticketStatus,
+          totalStake: ticket.displayTicketStake,
+          totalPayout: ticket.displayToPayAmount,
+          bets: ticket.bets.length,
+          betshop: ticket.betshopName,
+          placedDate: ticket.placedDate,
+        }
+      });
+      
+    } catch (error: any) {
+      console.error("❌ [DK-IMPORT] Error:", error);
+      res.status(500).json({ 
+        error: "Failed to import DraftKings ticket",
+        message: error.message || 'Unknown error'
+      });
     }
   });
 

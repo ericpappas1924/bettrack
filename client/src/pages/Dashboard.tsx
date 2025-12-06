@@ -53,7 +53,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [fetchingCLV, setFetchingCLV] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
-  const [showCalendar, setShowCalendar] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
 
   const { data: bets = [], isLoading } = useQuery<Bet[]>({

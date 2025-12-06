@@ -42,8 +42,9 @@ export function GameStatusBadge({ gameStartTime, sport, compact = false, betType
     );
   }
 
-  // For parlays/teasers, determine status from leg completion
-  if ((betType === 'Parlay' || betType === 'Teaser' || betType === 'Player Prop Parlay') && notes) {
+  // For parlays/teasers/round robins, determine status from leg completion
+  const isMultiLegBet = betType === 'Parlay' || betType === 'Teaser' || betType === 'Player Prop Parlay' || betType?.toLowerCase().includes('round robin');
+  if (isMultiLegBet && notes) {
     const legs = notes.split('\n').filter(line => 
       line.trim() && 
       !line.startsWith('Category:') && 
@@ -54,7 +55,7 @@ export function GameStatusBadge({ gameStartTime, sport, compact = false, betType
 
     if (legs.length > 0) {
       const totalLegs = legs.length;
-      const completeLegs = legs.filter(leg => leg.includes('[Won]') || leg.includes('[Lost]')).length;
+      const completeLegs = legs.filter(leg => leg.includes('[Won]') || leg.includes('[Lost]') || leg.includes('[Push]')).length;
       const allComplete = completeLegs === totalLegs;
 
       // If all legs complete, show as FINAL

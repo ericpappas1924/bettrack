@@ -12,7 +12,8 @@ import { findGameByTeamAndDate } from './scoreRoomApi';
 interface ParlayLeg {
   gameDate: Date | null;
   sport: string;
-  team: string;
+  team: string;           // Game matchup (for lookup) or team name
+  betTeam?: string;       // Actual team bet on (for spread bets)
   betType: 'Moneyline' | 'Spread' | 'Total';
   line?: number;
   overUnder?: 'Over' | 'Under';
@@ -22,7 +23,9 @@ interface ParlayLeg {
 
 /**
  * Parse parlay legs from bet notes
- * Legs are stored in notes with format: [DATE] [SPORT] BET_DETAILS
+ * Supports two formats:
+ * 1. Standard parlay: [DATE TIME] [SPORT] BET_DETAILS
+ * 2. Round Robin (from DK): [SPORT] Selection @ Odds - Matchup [Status]
  */
 export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
   const legs: ParlayLeg[] = [];
@@ -38,7 +41,49 @@ export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
   });
   
   for (const legLine of lines) {
-    // Pattern: [DATE TIME] [SPORT] BET DETAILS
+    // Try Round Robin format first: [SPORT] Selection @ Odds - Matchup [Status]
+    // Example: [NCAAB] Indiana -2.5 @ +200 - Louisville vs Indiana [Pending]
+    const rrMatch = legLine.match(/\[([^\]]+)\]\s+(.+?)\s+@\s+([+-]\d+)\s+-\s+(.+?)\s*\[(Won|Lost|Pending|Push)\]/i);
+    if (rrMatch) {
+      const sport = rrMatch[1].toUpperCase();
+      const selection = rrMatch[2].trim(); // e.g., "Indiana -2.5"
+      const odds = rrMatch[3]; // e.g., "+200"
+      const matchup = rrMatch[4].trim(); // e.g., "Louisville vs Indiana" or "Boise State vs Butler"
+      const status = rrMatch[5]; // e.g., "Pending"
+      
+      console.log(`   📍 Parsed Round Robin leg: ${selection} (${sport}) - Matchup: ${matchup}`);
+      
+      // Extract team and spread from selection (e.g., "Indiana -2.5")
+      const selectionMatch = selection.match(/^(.+?)\s+([+-]?\d+\.?\d*)\s*$/);
+      let team = matchup; // Use full matchup for game lookup
+      let betTeam = selection; // The team we're betting on
+      let line: number | undefined;
+      let betType: 'Moneyline' | 'Spread' | 'Total' = 'Moneyline';
+      
+      if (selectionMatch) {
+        betTeam = selectionMatch[1].trim();
+        line = parseFloat(selectionMatch[2]);
+        betType = 'Spread';
+      }
+      
+      // Use today as game date for active games (real date should come from bet.gameStartTime)
+      const gameDate = new Date();
+      
+      legs.push({
+        gameDate,
+        sport,
+        team: matchup, // Full matchup for game lookup
+        betTeam: betTeam, // Actual team being bet on
+        betType,
+        line,
+        overUnder: undefined,
+        teaserAdjustment: undefined,
+        rawDescription: `${betTeam} ${line !== undefined ? (line >= 0 ? '+' : '') + line : ''} (${matchup})`
+      });
+      continue;
+    }
+    
+    // Try standard parlay format: [DATE TIME] [SPORT] BET DETAILS
     const legMatch = legLine.match(/\[([^\]]+)\]\s*\[([^\]]+)\]\s*(.+)/);
     if (!legMatch) {
       console.log(`   ⚠️  Could not parse leg: ${legLine}`);
@@ -340,12 +385,26 @@ export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat
     }
     
     // Create temporary bet object for tracking
+    // For spread bets, use betTeam if available; for totals use 'TOTAL'
+    let teamForTracking: string;
+    if (leg.betType === 'Spread' && leg.betTeam) {
+      // Round Robin spread bet - use the team we're betting on
+      teamForTracking = `${leg.betTeam} ${leg.line !== undefined ? (leg.line >= 0 ? '+' : '') + leg.line : ''}`;
+    } else if (leg.betType === 'Total') {
+      teamForTracking = 'TOTAL';
+    } else if (leg.team.includes(' vs ')) {
+      // Matchup stored in team field, but not a spread/total
+      teamForTracking = leg.betTeam || leg.team.split(' vs ')[0].trim();
+    } else {
+      teamForTracking = leg.team;
+    }
+    
     const tempBet = {
       id: `parlay-${betId}-leg-${i}`,
       sport: leg.sport,
       game: fullMatchup,
-      team: leg.team.includes(' vs ') ? 'TOTAL' : leg.team,
-      betType: leg.betType,
+      team: teamForTracking,
+      betType: leg.betType === 'Spread' ? 'Straight' : leg.betType, // Map to tracker bet types
       status: 'active',
       gameStartTime: leg.gameDate
     };

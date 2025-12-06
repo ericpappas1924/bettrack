@@ -63,9 +63,9 @@ export async function registerRoutes(
           return false;
         }
         
-        // CRITICAL: Skip parlays/teasers - they use dedicated parlay tracker
+        // CRITICAL: Skip parlays/teasers/round robins - they use dedicated parlay tracker
         const betType = b.betType?.toLowerCase() || '';
-        if (betType.includes('parlay') || betType.includes('teaser')) {
+        if (betType.includes('parlay') || betType.includes('teaser') || betType.includes('round robin')) {
           console.log(`   ⏭️  Skipping bet ${b.id.substring(0, 8)}: ${b.betType} (uses parlay tracker)`);
           return false;
         }
@@ -121,14 +121,14 @@ export async function registerRoutes(
       
       const bets = await storage.getAllBets(userId);
       
-      // Filter to active parlays/teasers
+      // Filter to active parlays/teasers/round robins
       const activeParlays = bets.filter((b: any) => {
         if (b.status !== 'active') return false;
         const betType = b.betType?.toLowerCase() || '';
-        return betType.includes('parlay') || betType.includes('teaser');
+        return betType.includes('parlay') || betType.includes('teaser') || betType.includes('round robin');
       });
       
-      console.log(`📊 [API] Found ${activeParlays.length} active parlay(s)`);
+      console.log(`📊 [API] Found ${activeParlays.length} active parlay/round robin(s)`);
       
       // Get live stats for each parlay's legs
       const parlayStats: { betId: string; legs: ParlayLegLiveStat[] }[] = [];

@@ -94,11 +94,11 @@ export default function Dashboard() {
     })(),
   });
 
-  // Check if there are any active parlays
+  // Check if there are any active parlays/round robins
   const hasActiveParlays = bets.some((bet) => {
     if (bet.status !== 'active') return false;
     const betType = bet.betType?.toLowerCase() || '';
-    return betType.includes('parlay') || betType.includes('teaser');
+    return betType.includes('parlay') || betType.includes('teaser') || betType.includes('round robin');
   });
 
   // Fetch parlay live stats (for active parlays) - uses its own polling condition

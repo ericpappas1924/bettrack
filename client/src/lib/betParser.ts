@@ -886,12 +886,29 @@ function extractTeamFromBet(parsed: ParsedBet): string {
     //   Total: "Over 45.5-110" -> Keep "Over 45.5"
     
     // Match spread pattern: team name + spread (must have .5, ½, or single digit 0-20) + odds
+    // Also capture bought point indicator: (B+½), (B+1), etc.
     // This distinguishes spreads (+4.5, -7, +10½) from moneylines (-185, +150)
-    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-](?:[\d]{1,2}(?:[\.½¼][05]?)?))(?:\s*[+-]\d{3,}|\s*\()/);
+    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-](?:[\d]{1,2}(?:[\.½¼][05]?)?))(?:\s*[+-]\d{3,})?\s*(\(B\+[^)]+\))?/);
     if (spreadMatch) {
       const team = spreadMatch[1].trim();
       const spread = spreadMatch[2].replace('½', '.5').replace('¼', '.25');
-      return `${team} ${spread}`;
+      const boughtPoint = spreadMatch[3] || ''; // (B+½), (B+1), etc.
+      
+      // Format bought point indicator more readably: (B+½) -> (Bought +0.5)
+      let boughtPointDisplay = '';
+      if (boughtPoint) {
+        const boughtMatch = boughtPoint.match(/\(B\+([^)]+)\)/);
+        if (boughtMatch) {
+          let boughtValue = boughtMatch[1].replace('½', '0.5').replace('¼', '0.25');
+          // Ensure it starts with a digit (e.g., ".5" -> "0.5")
+          if (boughtValue.startsWith('.')) {
+            boughtValue = '0' + boughtValue;
+          }
+          boughtPointDisplay = ` (Bought +${boughtValue})`;
+        }
+      }
+      
+      return `${team} ${spread}${boughtPointDisplay}`;
     }
     
     // Match total pattern: Over/Under + number + odds

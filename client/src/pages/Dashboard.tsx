@@ -35,10 +35,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { Bet } from "@shared/schema";
-import {
-  americanToImpliedProbability,
-  calculateExpectedValue,
-} from "@/lib/betting";
 import { getGameStatus, type Sport } from "@shared/betTypes";
 
 export default function Dashboard() {
@@ -331,14 +327,6 @@ export default function Dashboard() {
     0
   );
 
-  const totalLiveEV = activeBets.reduce((sum, bet) => {
-    const openingOdds = parseFloat(bet.openingOdds);
-    const liveOdds = bet.liveOdds ? parseFloat(bet.liveOdds) : openingOdds;
-    const stake = parseFloat(bet.stake);
-    const liveProbability = americanToImpliedProbability(liveOdds);
-    return sum + calculateExpectedValue(stake, liveOdds, liveProbability);
-  }, 0);
-
   const handleFetchCLV = (betId: string) => {
     setFetchingCLV(prev => new Set(prev).add(betId));
     fetchCLVMutation.mutate(betId, {
@@ -548,11 +536,11 @@ export default function Dashboard() {
               icon={<TrendingUp className="h-4 w-4" />}
             />
             <MetricCard
-              label="Est. EV"
-              value={`${totalLiveEV >= 0 ? "$" : "-$"}${Math.abs(totalLiveEV).toFixed(0)}`}
-              trend={activeBets.length > 0 ? {
-                value: totalLiveEV >= 0 ? "+EV" : "-EV",
-                positive: totalLiveEV >= 0,
+              label="ROI"
+              value={settledBets.length > 0 ? `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%` : "-"}
+              trend={settledBets.length > 0 ? {
+                value: `$${totalStaked.toFixed(0)} staked`,
+                positive: roi >= 0,
               } : undefined}
               icon={<Zap className="h-4 w-4" />}
               className="col-span-2 md:col-span-1"

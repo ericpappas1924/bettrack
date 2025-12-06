@@ -396,6 +396,29 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
       continue;
     }
     
+    // Try RBL/DST Parlay format: [RBL] - DST Parlay|ID:...
+    // Then: Game matchup on next line
+    // Then: To Win: TEAM (TEAM1 @ TEAM2)
+    const rblParlayMatch = line.match(/\[RBL\]\s*-\s*DST\s+Parlay/i);
+    if (rblParlayMatch && i + 2 < lines.length) {
+      const gameMatchup = lines[i + 1]?.trim();
+      const toWinLine = lines[i + 2]?.trim();
+      
+      if (gameMatchup && toWinLine && toWinLine.includes('To Win:')) {
+        // Extract team name from "To Win: TEAM (TEAM1 @ TEAM2)"
+        const toWinMatch = toWinLine.match(/To Win:\s*([^(]+)\s*\(([^)]+)\)/);
+        if (toWinMatch) {
+          const team = toWinMatch[1].trim();
+          const matchup = toWinMatch[2].trim();
+          const legText = `[NCAAF] ${gameMatchup} - ${team} to Win [Pending]`;
+          legs.push(legText);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg: ${legText}`);
+          i += 3; // Skip header, game, and To Win line
+          continue;
+        }
+      }
+    }
+    
     // Try UFC format: [DATE] [MU] - EVENT INFO (first line)
     // Then next line: [NUMBER] FIGHTER ODDS (FIGHTER1 vrs FIGHTER2) [STATUS]
     const ufcHeaderMatch = line.match(/\[([^\]]+)\]\s*\[MU\]\s*-\s*(.+)/);
@@ -530,12 +553,14 @@ export function parseBetPaste(rawText: string): ParseResult {
       const isLive = isLiveBet(block);
       
       let betType = 'Straight';
-      // Check for player prop parlay first (has both keywords)
-      if (block.includes('PLAYER PROPS') && block.includes('Parlay')) {
+      // Check for player prop parlay first (has both keywords AND actual player prop content)
+      // But exclude if it's clearly a moneyline parlay (has "To Win:" pattern)
+      const hasToWinPattern = block.includes('To Win:');
+      if (block.includes('PLAYER PROPS') && block.includes('Parlay') && !hasToWinPattern) {
         betType = 'Player Prop Parlay';
-      } else if (block.includes('PLAYER PROPS')) {
+      } else if (block.includes('PLAYER PROPS') && !hasToWinPattern) {
         betType = 'Player Prop';
-      } else if (block.includes('PARLAY')) {
+      } else if (block.includes('PARLAY') || block.includes('Parlay')) {
         betType = 'Parlay';
       } else if (block.includes('TEAS')) {
         betType = 'Teaser';

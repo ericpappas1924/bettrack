@@ -847,23 +847,44 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
         gameStatus = liveScore.message;
         console.log(`   📊 Live Score: ${awayScore} - ${homeScore} (${gameStatus})`);
       } else {
-        // No live score, try box score (for completed games)
-        console.log(`   📊 No live score, fetching box score...`);
-        const boxScore = await scoreRoom.fetchBoxScore(game.league_abbrv, game.gameId);
+        // No live score - game hasn't started yet or is pregame
+        // Don't fetch box score as it might return stale/empty data
+        console.log(`   ⏭️  No live score available - game likely hasn't started yet`);
         
-        if (!boxScore) {
-          console.log(`   ❌ No score data available`);
+        // For games without live scores, check if they've actually started based on time
+        const gameStartTime = new Date(bet.gameStartTime);
+        const now = new Date();
+        const hoursSinceStart = (now.getTime() - gameStartTime.getTime()) / (1000 * 60 * 60);
+        
+        // Only try box score if game should definitely be over (6+ hours for NCAAF)
+        if (hoursSinceStart > 6) {
+          console.log(`   📊 Game started ${hoursSinceStart.toFixed(1)}h ago - checking box score...`);
+          const boxScore = await scoreRoom.fetchBoxScore(game.league_abbrv, game.gameId);
+          
+          if (boxScore) {
+            // Extract scores from box score using helper function
+            const [away, home] = scoreRoom.extractScoresFromBoxScore(boxScore);
+            
+            // Only mark as complete if we got actual scores (not 0-0)
+            if (away > 0 || home > 0) {
+              awayScore = away;
+              homeScore = home;
+              gameStatus = 'Final';
+              isComplete = true;
+              isLive = false;
+              console.log(`   📊 Final Score from box score: ${game.awayTeam} ${awayScore}, ${game.homeTeam} ${homeScore}`);
+            } else {
+              console.log(`   ⚠️  Box score returned 0-0 - game may not have data yet`);
+              return null;
+            }
+          } else {
+            console.log(`   ❌ No box score available`);
+            return null;
+          }
+        } else {
+          console.log(`   ⏰ Game started ${hoursSinceStart.toFixed(1)}h ago - too soon to check box score`);
           return null;
         }
-        
-        // Extract scores from box score using helper function
-        const [away, home] = scoreRoom.extractScoresFromBoxScore(boxScore);
-        awayScore = away;
-        homeScore = home;
-        gameStatus = 'Final';
-        isComplete = true;
-        isLive = false;
-        console.log(`   📊 Final Score from box score: ${game.awayTeam} ${awayScore}, ${game.homeTeam} ${homeScore}`);
       }
     }
     

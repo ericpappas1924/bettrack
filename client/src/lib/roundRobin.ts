@@ -255,7 +255,9 @@ export function formatOdds(odds: number): string {
 
 /**
  * Check if a bet is a round robin
+ * Can match "Round Robin" or "2/3 Round Robin (3 Bets)"
  */
-export function isRoundRobin(betType: string): boolean {
-  return /\d+\/\d+\s*Round Robin/i.test(betType);
+export function isRoundRobin(betType: string | null | undefined): boolean {
+  if (!betType) return false;
+  return /round\s*robin/i.test(betType);
 }

@@ -653,7 +653,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               <div>
                 <p className="text-xs sm:text-sm text-muted-foreground mb-1">Round Robin Legs</p>
                 <RoundRobinSettlement
-                  betType={bet.betType}
+                  betType={bet.team || bet.betType || ""}
                   totalStake={parseFloat(bet.stake)}
                   notes={bet.notes}
                   onSettleLeg={handleSettleLeg}

@@ -625,7 +625,9 @@ export async function registerRoutes(
       }
       
       // Parse round robin format (e.g., "2/3 Round Robin (3 Bets)")
-      const rrMatch = existingBet.betType?.match(/(\d+)\/(\d+)\s*Round Robin\s*\((\d+)\s*Bets?\)/i);
+      // The format might be in betType or team field
+      const rrSource = existingBet.team || existingBet.betType || '';
+      const rrMatch = rrSource.match(/(\d+)\/(\d+)\s*Round Robin\s*\((\d+)\s*Bets?\)/i);
       if (!rrMatch) {
         return res.status(400).json({ error: "Could not parse round robin format" });
       }

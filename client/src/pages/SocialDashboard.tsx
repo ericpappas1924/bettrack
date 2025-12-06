@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, Star, CheckCircle2 } from "lucide-react";
+import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, CheckCircle2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -389,7 +389,7 @@ export default function SocialDashboard() {
                 <span className="sm:hidden">Feed</span>
               </TabsTrigger>
               <TabsTrigger value="potd" data-testid="tab-potd">
-                <Star className="h-4 w-4 mr-1 sm:mr-2" />
+                <Flame className="h-4 w-4 mr-1 sm:mr-2" />
                 <span className="hidden sm:inline">Plays</span>
                 <span className="sm:hidden">POTD</span>
               </TabsTrigger>
@@ -483,7 +483,7 @@ export default function SocialDashboard() {
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
-                          <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          <Flame className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-sm sm:text-base">Plays of the Day</h3>
@@ -600,7 +600,7 @@ export default function SocialDashboard() {
                   </div>
                 ) : activePotdBets.length === 0 ? (
                   <Card className="py-8 text-center">
-                    <Star className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                    <Flame className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                     <p className="text-muted-foreground">No active plays</p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Mark a bet as Play of the Day from your tracker
@@ -984,7 +984,7 @@ function PotdBetCard({
           </div>
           {category && (
             <Badge variant="outline" className="text-xs flex items-center gap-1">
-              <Star className="h-3 w-3" />
+              <Flame className="h-3 w-3" />
               {category.displayName.replace(' Plays of the Day', '')}
             </Badge>
           )}

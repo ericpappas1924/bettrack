@@ -154,30 +154,31 @@ export function buildRoundRobinBreakdown(
   const combos = combinations(legIndices, parlaySize);
   
   const parlays: RoundRobinParlay[] = combos.map(combo => {
-    // Calculate parlay odds
-    const legOdds = combo.map(idx => {
-      const leg = legs.find(l => l.index === idx);
-      return leg ? americanToDecimal(leg.odds) : 1;
-    });
-    const parlayDecimalOdds = calculateParlayDecimalOdds(legOdds);
-    const potentialWin = stakePerParlay * parlayDecimalOdds - stakePerParlay;
+    const parlayLegs = combo.map(idx => legs.find(l => l.index === idx)!);
     
     // Determine parlay status based on leg statuses
-    const parlayLegs = combo.map(idx => legs.find(l => l.index === idx)!);
     let status: 'pending' | 'won' | 'lost' = 'pending';
     
     // If any leg lost, parlay is lost
     if (parlayLegs.some(l => l.status === 'lost')) {
       status = 'lost';
     } 
-    // If all legs won, parlay is won
-    else if (parlayLegs.every(l => l.status === 'won')) {
+    // If all legs are settled (won or push) - parlay is won
+    else if (parlayLegs.every(l => l.status === 'won' || l.status === 'push')) {
       status = 'won';
     }
     // If any leg is still pending, parlay is pending
     else if (parlayLegs.some(l => l.status === 'pending')) {
       status = 'pending';
     }
+    
+    // Calculate parlay odds - only won legs contribute odds, pushes are 1.0
+    const wonLegs = parlayLegs.filter(l => l.status === 'won');
+    const legOdds = wonLegs.length > 0 
+      ? wonLegs.map(l => americanToDecimal(l.odds))
+      : [1]; // All pushes = stake refund
+    const parlayDecimalOdds = calculateParlayDecimalOdds(legOdds);
+    const potentialWin = stakePerParlay * parlayDecimalOdds - stakePerParlay;
     
     return {
       legs: combo,

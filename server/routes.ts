@@ -607,13 +607,9 @@ export async function registerRoutes(
     }
   });
 
-  // Settle round robin with calculated profit
+  // Settle round robin - calculates profit server-side from leg outcomes
   app.post("/api/bets/:id/settle-round-robin", isAuthenticated, async (req: any, res) => {
     try {
-      const { profit } = z.object({
-        profit: z.number()
-      }).parse(req.body);
-      
       const existingBet = await storage.getBet(req.params.id);
       if (!existingBet) {
         return res.status(404).json({ error: "Bet not found" });
@@ -622,7 +618,109 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Forbidden" });
       }
       
-      // Determine result based on profit
+      // Validate this is a round robin
+      const betType = existingBet.betType?.toLowerCase() || '';
+      if (!betType.includes('round robin')) {
+        return res.status(400).json({ error: "This endpoint is only for round robin bets" });
+      }
+      
+      // Parse round robin format (e.g., "2/3 Round Robin (3 Bets)")
+      const rrMatch = existingBet.betType?.match(/(\d+)\/(\d+)\s*Round Robin\s*\((\d+)\s*Bets?\)/i);
+      if (!rrMatch) {
+        return res.status(400).json({ error: "Could not parse round robin format" });
+      }
+      
+      const parlaySize = parseInt(rrMatch[1]);
+      const totalLegs = parseInt(rrMatch[2]);
+      const totalParlays = parseInt(rrMatch[3]);
+      const totalStake = parseFloat(existingBet.stake);
+      const stakePerParlay = totalStake / totalParlays;
+      
+      // Parse legs from notes
+      const notes = existingBet.notes || '';
+      const lines = notes.split('\n').filter((l: string) => l.trim());
+      
+      interface ParsedLeg {
+        index: number;
+        odds: number;
+        status: 'pending' | 'won' | 'lost' | 'push';
+      }
+      
+      const legs: ParsedLeg[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const match = line.match(/\[([^\]]+)\]\s*(.+?)\s*@\s*([+-]?\d+)\s*-\s*(.+?)\s*\[(Pending|Won|Lost|Push)\]/i);
+        if (match) {
+          legs.push({
+            index: i,
+            odds: parseInt(match[3]),
+            status: match[5].toLowerCase() as 'pending' | 'won' | 'lost' | 'push'
+          });
+        }
+      }
+      
+      // Check all legs are settled
+      if (legs.some(l => l.status === 'pending')) {
+        return res.status(400).json({ error: "All legs must be settled before finalizing round robin" });
+      }
+      
+      // Generate combinations
+      function combinations<T>(arr: T[], k: number): T[][] {
+        if (k === 0) return [[]];
+        if (arr.length === 0) return [];
+        const [first, ...rest] = arr;
+        const withFirst = combinations(rest, k - 1).map(combo => [first, ...combo]);
+        const withoutFirst = combinations(rest, k);
+        return [...withFirst, ...withoutFirst];
+      }
+      
+      // American to decimal odds
+      function americanToDecimal(american: number): number {
+        if (american > 0) {
+          return (american / 100) + 1;
+        } else {
+          return (100 / Math.abs(american)) + 1;
+        }
+      }
+      
+      // Calculate profit for each parlay
+      const combos = combinations(legs.map(l => l.index), parlaySize);
+      let totalPayout = 0;
+      
+      for (const combo of combos) {
+        const parlayLegs = combo.map(idx => legs.find(l => l.index === idx)!);
+        
+        // Check if any leg lost - parlay is lost, no payout
+        if (parlayLegs.some(l => l.status === 'lost')) {
+          continue; // Lost parlay - $0 payout
+        }
+        
+        // Check if all legs pushed - return stake only (no profit)
+        if (parlayLegs.every(l => l.status === 'push')) {
+          totalPayout += stakePerParlay; // Just stake refund
+          continue;
+        }
+        
+        // Mix of won and pushed legs:
+        // - Won legs contribute their decimal odds
+        // - Push legs effectively reduce to 1.0 (removed from parlay)
+        const wonLegs = parlayLegs.filter(l => l.status === 'won');
+        if (wonLegs.length === 0) {
+          // All pushes already handled above, shouldn't reach here
+          totalPayout += stakePerParlay;
+          continue;
+        }
+        
+        // Calculate combined odds from only the won legs
+        const decimalOdds = wonLegs.map(l => americanToDecimal(l.odds));
+        const parlayDecimalOdds = decimalOdds.reduce((acc, odds) => acc * odds, 1);
+        
+        // Payout = stake * combined decimal odds (includes stake return)
+        totalPayout += stakePerParlay * parlayDecimalOdds;
+      }
+      
+      // Profit = total payout - total stake
+      const profit = totalPayout - totalStake;
       const result = profit > 0 ? "won" : profit < 0 ? "lost" : "push";
       
       const bet = await storage.updateBet(req.params.id, {
@@ -634,10 +732,6 @@ export async function registerRoutes(
       
       res.json(bet);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        const validationError = fromZodError(error);
-        return res.status(400).json({ error: validationError.message });
-      }
       console.error("Error settling round robin:", error);
       res.status(500).json({ error: "Failed to settle round robin" });
     }

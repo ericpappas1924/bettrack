@@ -22,7 +22,7 @@ interface RoundRobinSettlementProps {
   totalStake: number;
   notes: string;
   onSettleLeg: (legIndex: number, result: 'won' | 'lost' | 'push') => void;
-  onSettleAll: (profit: number) => void;
+  onSettleAll: () => void; // Server calculates profit from leg outcomes
   isSettling?: boolean;
 }
 
@@ -208,7 +208,7 @@ export function RoundRobinSettlement({
       {allSettled && (
         <Button
           className="w-full"
-          onClick={() => onSettleAll(breakdown.totalProfit)}
+          onClick={() => onSettleAll()}
           disabled={isSettling}
           data-testid="button-settle-round-robin"
         >

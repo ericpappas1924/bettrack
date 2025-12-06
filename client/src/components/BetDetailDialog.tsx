@@ -156,10 +156,10 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
     },
   });
 
-  // Settle entire round robin mutation
+  // Settle entire round robin mutation - server calculates profit from leg outcomes
   const settleRoundRobinMutation = useMutation({
-    mutationFn: async ({ betId, profit }: { betId: string; profit: number }) => {
-      const res = await apiRequest("POST", `/api/bets/${betId}/settle-round-robin`, { profit });
+    mutationFn: async ({ betId }: { betId: string }) => {
+      const res = await apiRequest("POST", `/api/bets/${betId}/settle-round-robin`, {});
       return res.json();
     },
     onSuccess: () => {
@@ -184,9 +184,9 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
     settleLegMutation.mutate({ betId: bet.id, legIndex, result });
   };
 
-  const handleSettleRoundRobin = (profit: number) => {
+  const handleSettleRoundRobin = () => {
     if (!bet) return;
-    settleRoundRobinMutation.mutate({ betId: bet.id, profit });
+    settleRoundRobinMutation.mutate({ betId: bet.id });
   };
 
   if (!bet) return null;

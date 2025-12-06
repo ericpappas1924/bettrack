@@ -321,29 +321,10 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                       </p>
                     </div>
                     <div className="text-right">
-                      {bet.status === "active" ? (
-                        <>
-                          <p className="text-xs text-muted-foreground">Est. W/L</p>
-                          <p
-                            className={`font-semibold tabular-nums text-sm ${
-                              estimatedEV !== null && estimatedEV > 0
-                                ? "text-green-600 dark:text-green-500"
-                              : estimatedEV !== null && estimatedEV < 0
-                                ? "text-red-600 dark:text-red-500"
-                                : ""
-                            }`}
-                          >
-                            {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-xs text-muted-foreground">To Win</p>
-                          <p className="font-semibold tabular-nums text-sm">
-                            {formatCurrency(bet.potentialWin)}
-                          </p>
-                        </>
-                      )}
+                      <p className="text-xs text-muted-foreground">To Win</p>
+                      <p className="font-semibold tabular-nums text-sm">
+                        {formatCurrency(bet.potentialWin)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -365,7 +346,6 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
               <TableHead className="w-24 text-right">Odds</TableHead>
               <TableHead className="w-24 text-right">Stake</TableHead>
               <TableHead className="w-32">Live Progress</TableHead>
-              <TableHead className="w-28 text-right">Est. W/L</TableHead>
               <TableHead className="w-20 text-right">CLV</TableHead>
               <TableHead className="w-24">Status</TableHead>
               <TableHead className="w-24 text-right">P/L</TableHead>
@@ -480,18 +460,6 @@ export function BetTable({ bets, liveStats = [], onRowClick, onFetchCLV, fetchin
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>
                     )}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right tabular-nums text-sm font-semibold ${
-                      estimatedEV !== null && estimatedEV > 0
-                        ? "text-green-600 dark:text-green-500"
-                        : estimatedEV !== null && estimatedEV < 0
-                        ? "text-red-600 dark:text-red-500"
-                        : ""
-                    }`}
-                    data-testid={`text-ev-${bet.id}`}
-                  >
-                    {estimatedEV !== null ? formatCurrency(estimatedEV) : "-"}
                   </TableCell>
                   <TableCell
                     className={`text-right tabular-nums text-sm font-semibold ${

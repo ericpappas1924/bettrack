@@ -323,7 +323,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                 <CardTitle className="text-base sm:text-lg">Live Performance</CardTitle>
               </CardHeader>
               <CardContent className="px-3 sm:px-6">
-                <div className="grid grid-cols-3 gap-2 sm:gap-6">
+                <div className="grid grid-cols-2 gap-2 sm:gap-6">
                   <div className="text-center">
                     <p className="text-xs sm:text-sm text-muted-foreground mb-1">Win % Change</p>
                     <LiveProbabilityBadge
@@ -335,20 +335,6 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                     <p className="text-xs sm:text-sm text-muted-foreground mb-1">Current Win %</p>
                     <p className="text-lg sm:text-2xl font-bold tabular-nums">
                       {formatProbability(liveProbability)}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs sm:text-sm text-muted-foreground mb-1">Est. W/L</p>
-                    <p
-                      className={`text-lg sm:text-2xl font-bold tabular-nums ${
-                        estimatedEV > 0
-                          ? "text-green-600 dark:text-green-500"
-                          : estimatedEV < 0
-                          ? "text-red-600 dark:text-red-500"
-                          : ""
-                      }`}
-                    >
-                      {formatCurrency(estimatedEV)}
                     </p>
                   </div>
                 </div>

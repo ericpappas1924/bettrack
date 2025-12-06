@@ -1045,18 +1045,40 @@ export async function registerRoutes(
         return res.status(400).json({ error: "This bet is not a Play of the Day" });
       }
       
-      // Calculate profit
+      // Calculate profit in dollars and units
+      // POTD uses "bet to win 1 unit" standard:
+      // - Negative odds (favorite): risk |odds|/100 to win 1 unit (e.g., -200 = risk 2u to win 1u)
+      // - Positive odds (underdog): risk 1 unit to win odds/100 (e.g., +150 = risk 1u to win 1.5u)
       const stake = parseFloat(existingBet.stake);
       const potentialWin = existingBet.potentialWin ? parseFloat(existingBet.potentialWin) : 0;
+      const odds = parseFloat(existingBet.openingOdds);
+      
+      // Validate odds for unit calculation
+      if (isNaN(odds) || odds === 0) {
+        return res.status(400).json({ error: "Cannot settle POTD bet: missing or invalid odds" });
+      }
+      
+      // Calculate risk and win amounts in units based on odds
+      let riskUnits: number;
+      let winUnits: number;
+      if (odds < 0) {
+        // Favorite: risk more to win 1 unit
+        riskUnits = Math.abs(odds) / 100;
+        winUnits = 1;
+      } else {
+        // Underdog: risk 1 unit to win more
+        riskUnits = 1;
+        winUnits = odds / 100;
+      }
       
       let profit = 0;
       let units = 0;
       if (result === "won") {
         profit = potentialWin;
-        units = potentialWin / stake; // Calculate units won
+        units = winUnits; // Won the win units
       } else if (result === "lost") {
         profit = -stake;
-        units = -1; // Lost 1 unit
+        units = -riskUnits; // Lost the risk units
       }
       // Push = 0 profit, 0 units
       

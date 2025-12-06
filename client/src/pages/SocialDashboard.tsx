@@ -29,6 +29,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Link } from "wouter";
+import { formatPotdUnits, calculatePotdUnits, calculatePotdProfitUnits } from "@/lib/betting";
 import type { Bet, User as UserType, PotdCategory } from "@shared/schema";
 
 type BetWithUser = Bet & { user: UserType };
@@ -626,8 +627,11 @@ export default function SocialDashboard() {
                 {/* Settled POTD Bets */}
                 {settledPotdBets.length > 0 && (
                   <div className="space-y-2 pt-4 border-t">
-                    <h5 className="text-sm font-medium text-muted-foreground">Recently Settled</h5>
-                    {settledPotdBets.slice(0, 5).map((bet) => (
+                    <h5 className="text-sm font-medium text-muted-foreground">
+                      {selectedPotdCategory ? 'Settled History' : 'Recently Settled'}
+                    </h5>
+                    {/* When viewing a category, show all settled bets for full history */}
+                    {(selectedPotdCategory ? settledPotdBets : settledPotdBets.slice(0, 5)).map((bet) => (
                       <PotdBetCard
                         key={bet.id}
                         bet={bet}
@@ -884,13 +888,18 @@ export default function SocialDashboard() {
                     <p className="text-sm text-muted-foreground">{betToSettle.game}</p>
                   )}
                   <div className="flex items-center gap-2 pt-2 text-sm text-muted-foreground">
-                    <span>Stake: ${betToSettle.stake}</span>
-                    {betToSettle.potentialWin && (
-                      <>
-                        <span>|</span>
-                        <span>To Win: ${betToSettle.potentialWin}</span>
-                      </>
-                    )}
+                    {(() => {
+                      const odds = parseFloat(betToSettle.openingOdds);
+                      const units = calculatePotdUnits(odds);
+                      if (!units) {
+                        return <span className="text-muted-foreground">Unable to calculate units (missing odds)</span>;
+                      }
+                      return (
+                        <span>
+                          <span className="font-medium">{units.riskUnits.toFixed(2)}u</span> risked to win <span className="font-medium">{units.winUnits.toFixed(2)}u</span>
+                        </span>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -1017,7 +1026,22 @@ function PotdBetCard({
         <div className="flex items-center justify-between pt-2 border-t">
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">
-              Stake: <span className="font-medium text-foreground">${bet.stake}</span>
+              {(() => {
+                const odds = parseFloat(bet.openingOdds);
+                const units = calculatePotdUnits(odds);
+                if (!units) {
+                  return <span className="text-muted-foreground">--</span>;
+                }
+                if (isActive) {
+                  return <><span className="font-medium text-foreground">{units.riskUnits.toFixed(2)}u</span> to win <span className="font-medium text-foreground">{units.winUnits.toFixed(2)}u</span></>;
+                } else if (bet.result === 'won') {
+                  return <span className="font-medium text-green-600 dark:text-green-400">+{units.winUnits.toFixed(2)}u</span>;
+                } else if (bet.result === 'lost') {
+                  return <span className="font-medium text-red-600 dark:text-red-400">-{units.riskUnits.toFixed(2)}u</span>;
+                } else {
+                  return <span className="font-medium text-muted-foreground">0u (push)</span>;
+                }
+              })()}
             </span>
           </div>
           

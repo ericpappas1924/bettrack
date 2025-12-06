@@ -1026,7 +1026,10 @@ export async function registerRoutes(
     }
   });
 
-  // Settle a POTD bet (any user can settle)
+  // Settle a POTD bet
+  // NOTE: By design, any authenticated user can settle POTD bets.
+  // This is a community-driven feature where the community self-manages picks.
+  // All users can see all POTD bets and settle them as games complete.
   app.post("/api/potd/bets/:id/settle", isAuthenticated, async (req: any, res) => {
     try {
       const { result } = z.object({ 

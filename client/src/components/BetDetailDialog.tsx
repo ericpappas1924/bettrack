@@ -16,15 +16,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format } from "date-fns";
-import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator, RefreshCw, Trash2 } from "lucide-react";
+import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator, RefreshCw, Trash2, Star, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   americanToImpliedProbability,
   calculateExpectedValue,
   formatProbability,
 } from "@/lib/betting";
+
+interface PotdCategory {
+  id: string;
+  name: string;
+  displayName: string;
+  wins: number;
+  losses: number;
+  pushes: number;
+  units: number;
+  streak: number;
+}
 
 interface Bet {
   id: string;
@@ -50,6 +69,7 @@ interface Bet {
   createdAt: Date | string;
   gameStartTime?: Date | string | null;
   settledAt?: Date | string | null;
+  playOfDayCategory?: string | null;
 }
 
 interface BetDetailDialogProps {
@@ -69,6 +89,46 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
   const [closingOddsInput, setClosingOddsInput] = useState("");
   const [calculating, setCalculating] = useState(false);
   const [fetchingCLV, setFetchingCLV] = useState(false);
+  const [showPotdSelect, setShowPotdSelect] = useState(false);
+  const [selectedPotdCategory, setSelectedPotdCategory] = useState<string>("");
+
+  // Fetch POTD categories
+  const { data: potdCategories = [] } = useQuery<PotdCategory[]>({
+    queryKey: ["/api/potd/categories"],
+    enabled: open,
+  });
+
+  // Mark as POTD mutation
+  const markPotdMutation = useMutation({
+    mutationFn: async ({ betId, categoryId }: { betId: string; categoryId: string }) => {
+      const res = await apiRequest("POST", `/api/bets/${betId}/mark-potd`, { categoryId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/bets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/bets"] });
+      toast({
+        title: "Marked as Play of the Day",
+        description: "This bet has been added to the POTD tracker.",
+      });
+      setShowPotdSelect(false);
+      setSelectedPotdCategory("");
+      // Close dialog to ensure fresh data on reopen
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to mark as POTD",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleMarkAsPotd = () => {
+    if (!bet || !selectedPotdCategory) return;
+    markPotdMutation.mutate({ betId: bet.id, categoryId: selectedPotdCategory });
+  };
 
   if (!bet) return null;
 
@@ -553,6 +613,85 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                 ) : (
                   <p className="text-sm sm:text-base whitespace-pre-line">{bet.notes}</p>
                 )}
+              </div>
+            </>
+          )}
+
+          {/* POTD Section */}
+          {bet.status === "active" && !bet.playOfDayCategory && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Play of the Day</p>
+                  {!showPotdSelect && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPotdSelect(true)}
+                      data-testid="button-show-potd-select"
+                      className="text-amber-600 border-amber-500/50 hover:bg-amber-500/10"
+                    >
+                      <Star className="h-3 w-3 mr-1" />
+                      <span className="text-xs sm:text-sm">Mark as POTD</span>
+                    </Button>
+                  )}
+                </div>
+                {showPotdSelect && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Select value={selectedPotdCategory} onValueChange={setSelectedPotdCategory}>
+                      <SelectTrigger className="w-48" data-testid="select-potd-category-dialog">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {potdCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.displayName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      onClick={handleMarkAsPotd}
+                      disabled={!selectedPotdCategory || markPotdMutation.isPending}
+                      className="bg-amber-600 hover:bg-amber-700"
+                      data-testid="button-confirm-potd"
+                    >
+                      {markPotdMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      ) : (
+                        <Check className="h-3 w-3 mr-1" />
+                      )}
+                      Confirm
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setShowPotdSelect(false);
+                        setSelectedPotdCategory("");
+                      }}
+                      data-testid="button-cancel-potd"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Show if already marked as POTD */}
+          {bet.playOfDayCategory && (
+            <>
+              <Separator />
+              <div className="flex items-center gap-2">
+                <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 flex items-center gap-1">
+                  <Star className="h-3 w-3" />
+                  Play of the Day
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {potdCategories.find(c => c.id === bet.playOfDayCategory)?.displayName || 'Loading...'}
+                </span>
               </div>
             </>
           )}

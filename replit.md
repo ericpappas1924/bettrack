@@ -93,6 +93,21 @@ Preferred communication style: Simple, everyday language.
   - Result tracking (won, lost)
   - Projection source and notes for context
   - Timestamps for creation and settlement
+  - playOfDayCategory: Links to potdCategories for POTD tracking
+- `potdCategories` table: Play of the Day categories with:
+  - name: Internal identifier (ncaab, nba, nfl, ncaaf, other, croke, trevor)
+  - displayName: User-facing category name
+  - wins, losses, pushes: Record tracking
+  - units: Cumulative profit/loss in units
+  - streak: Current win/loss streak (positive = wins, negative = losses)
+
+**POTD (Play of the Day) Feature**:
+- Community-driven pick system where any authenticated user can:
+  - Mark any bet as POTD from the bet detail dialog
+  - Settle POTD bets (won/lost/push) - intentionally open to all users
+- 7 predefined categories: NCAAB, NBA, NFL, NCAAF, Other, Croke Thermonuclear Mega Nuke, Trevor's Can't Lose
+- Stats automatically track: wins/losses, units, streaks
+- Located in Social Dashboard under "Plays" tab
 
 **Current Implementation**: In-memory storage via `MemStorage` class implementing `IStorage` interface
 - Designed for easy migration to database-backed storage

@@ -17,13 +17,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Minus } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Trophy, TrendingUp, Users, Copy, ArrowLeft, Loader2, LogOut, User, ChevronRight, Eye, Clock, Target, Check, X, Flame, Snowflake, Star, CheckCircle2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Link } from "wouter";
-import type { Bet, User as UserType } from "@shared/schema";
+import type { Bet, User as UserType, PotdCategory } from "@shared/schema";
 
 type BetWithUser = Bet & { user: UserType };
 
@@ -36,6 +42,15 @@ type LeaderboardEntry = {
   totalProfit: number;
   roi: number;
   avgClv: number | null;
+};
+
+type PotdStats = {
+  totalWins: number;
+  totalLosses: number;
+  totalPushes: number;
+  totalUnits: string;
+  winRate: string;
+  record: string;
 };
 
 // Parse parlay legs from notes field
@@ -105,6 +120,9 @@ export default function SocialDashboard() {
   const [betToTail, setBetToTail] = useState<BetWithUser | null>(null);
   const [tailStake, setTailStake] = useState("");
   const [detailBet, setDetailBet] = useState<BetWithUser | null>(null);
+  const [selectedPotdCategory, setSelectedPotdCategory] = useState<string | null>(null);
+  const [settleDialogOpen, setSettleDialogOpen] = useState(false);
+  const [betToSettle, setBetToSettle] = useState<BetWithUser | null>(null);
 
   const { data: feed = [], isLoading: feedLoading } = useQuery<BetWithUser[]>({
     queryKey: ["/api/social/feed"],
@@ -117,6 +135,18 @@ export default function SocialDashboard() {
   const { data: userBets = [], isLoading: userBetsLoading } = useQuery<BetWithUser[]>({
     queryKey: ["/api/social/users", selectedUser?.id, "bets"],
     enabled: !!selectedUser,
+  });
+
+  const { data: potdCategories = [], isLoading: potdCategoriesLoading } = useQuery<PotdCategory[]>({
+    queryKey: ["/api/potd/categories"],
+  });
+
+  const { data: potdBets = [], isLoading: potdBetsLoading } = useQuery<BetWithUser[]>({
+    queryKey: ["/api/potd/bets", selectedPotdCategory],
+  });
+
+  const { data: potdStats } = useQuery<PotdStats>({
+    queryKey: ["/api/potd/stats"],
   });
 
   const tailMutation = useMutation({
@@ -139,6 +169,29 @@ export default function SocialDashboard() {
         return;
       }
       toast({ title: "Failed to tail bet", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const settlePotdMutation = useMutation({
+    mutationFn: async ({ betId, result }: { betId: string; result: 'won' | 'lost' | 'push' }) => {
+      const res = await apiRequest("POST", `/api/potd/bets/${betId}/settle`, { result });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/bets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/potd/stats"] });
+      toast({ title: "POTD Settled!", description: "The bet and category stats have been updated" });
+      setSettleDialogOpen(false);
+      setBetToSettle(null);
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({ title: "Session expired", description: "Please log in again", variant: "destructive" });
+        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        return;
+      }
+      toast({ title: "Failed to settle bet", description: error.message, variant: "destructive" });
     },
   });
 
@@ -186,7 +239,41 @@ export default function SocialDashboard() {
     setDetailBet(bet);
   };
 
+  const handleSettlePotd = (bet: BetWithUser) => {
+    setBetToSettle(bet);
+    setSettleDialogOpen(true);
+  };
+
+  const handleConfirmSettle = (result: 'won' | 'lost' | 'push') => {
+    if (betToSettle) {
+      settlePotdMutation.mutate({ betId: betToSettle.id, result });
+    }
+  };
+
+  const getStreakIcon = (streak: number) => {
+    if (streak >= 3) return <Flame className="h-4 w-4 text-orange-500" />;
+    if (streak <= -3) return <Snowflake className="h-4 w-4 text-blue-500" />;
+    if (streak > 0) return <Flame className="h-3 w-3 text-orange-400/70" />;
+    if (streak < 0) return <Snowflake className="h-3 w-3 text-blue-400/70" />;
+    return null;
+  };
+
+  const getStreakText = (streak: number) => {
+    if (streak === 0) return null;
+    const absStreak = Math.abs(streak);
+    return `${absStreak}${streak > 0 ? 'W' : 'L'}`;
+  };
+
+  const getCategoryRecord = (cat: PotdCategory) => {
+    if (cat.pushes > 0) {
+      return `${cat.wins}-${cat.losses}-${cat.pushes}`;
+    }
+    return `${cat.wins}-${cat.losses}`;
+  };
+
   const activeFeedBets = feed.filter(bet => bet.status === 'active');
+  const activePotdBets = potdBets.filter(bet => bet.status === 'active');
+  const settledPotdBets = potdBets.filter(bet => bet.status === 'settled');
 
   if (feedLoading || leaderboardLoading) {
     return (
@@ -295,14 +382,21 @@ export default function SocialDashboard() {
           </div>
         ) : (
           <Tabs defaultValue="feed" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-2 max-w-xs">
+            <TabsList className="grid w-full grid-cols-3 max-w-md">
               <TabsTrigger value="feed" data-testid="tab-feed">
-                <Users className="h-4 w-4 mr-2" />
-                Feed
+                <Users className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Feed</span>
+                <span className="sm:hidden">Feed</span>
+              </TabsTrigger>
+              <TabsTrigger value="potd" data-testid="tab-potd">
+                <Star className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Plays</span>
+                <span className="sm:hidden">POTD</span>
               </TabsTrigger>
               <TabsTrigger value="leaderboard" data-testid="tab-leaderboard">
-                <Trophy className="h-4 w-4 mr-2" />
-                Rankings
+                <Trophy className="h-4 w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Rankings</span>
+                <span className="sm:hidden">Ranks</span>
               </TabsTrigger>
             </TabsList>
 
@@ -379,6 +473,177 @@ export default function SocialDashboard() {
                   </Card>
                 ))
               )}
+            </TabsContent>
+
+            <TabsContent value="potd" className="space-y-4">
+              {/* Overall Stats Card */}
+              {potdStats && (
+                <Card className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
+                          <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-sm sm:text-base">Plays of the Day</h3>
+                          <p className="text-xs text-muted-foreground">Community picks</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <div className="text-center">
+                          <p className="font-bold text-lg sm:text-xl tabular-nums">{potdStats.record}</p>
+                          <p className="text-xs text-muted-foreground">Record</p>
+                        </div>
+                        <div className="text-center">
+                          <p className={`font-bold text-lg sm:text-xl tabular-nums ${parseFloat(potdStats.totalUnits) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {parseFloat(potdStats.totalUnits) >= 0 ? '+' : ''}{potdStats.totalUnits}u
+                          </p>
+                          <p className="text-xs text-muted-foreground">Units</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-lg sm:text-xl tabular-nums">{potdStats.winRate}%</p>
+                          <p className="text-xs text-muted-foreground">Win Rate</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Category Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Label className="text-sm font-medium">Category:</Label>
+                <Select
+                  value={selectedPotdCategory || "all"}
+                  onValueChange={(v) => setSelectedPotdCategory(v === "all" ? null : v)}
+                >
+                  <SelectTrigger className="w-48" data-testid="select-potd-category">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {potdCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.displayName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Category Cards */}
+              {!selectedPotdCategory && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {potdCategoriesLoading ? (
+                    <div className="col-span-full flex justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    potdCategories.map((cat) => (
+                      <Card 
+                        key={cat.id} 
+                        className="hover-elevate cursor-pointer"
+                        onClick={() => setSelectedPotdCategory(cat.id)}
+                        data-testid={`potd-category-${cat.name}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-medium text-sm truncate">{cat.displayName}</h4>
+                                {getStreakIcon(cat.streak)}
+                                {getStreakText(cat.streak) && (
+                                  <span className={`text-xs font-medium ${cat.streak > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                    {getStreakText(cat.streak)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {getCategoryRecord(cat)} Record
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold tabular-nums ${cat.units >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {cat.units >= 0 ? '+' : ''}{cat.units.toFixed(2)}u
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* POTD Bets List */}
+              <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  {selectedPotdCategory ? (
+                    <>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setSelectedPotdCategory(null)}
+                        className="h-auto p-1"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      {potdCategories.find(c => c.id === selectedPotdCategory)?.displayName}
+                    </>
+                  ) : (
+                    "Active Plays"
+                  )}
+                </h4>
+                
+                {potdBetsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : activePotdBets.length === 0 ? (
+                  <Card className="py-8 text-center">
+                    <Star className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-muted-foreground">No active plays</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Mark a bet as Play of the Day from your tracker
+                    </p>
+                  </Card>
+                ) : (
+                  activePotdBets.map((bet) => (
+                    <PotdBetCard
+                      key={bet.id}
+                      bet={bet}
+                      category={potdCategories.find(c => c.id === bet.playOfDayCategory)}
+                      currentUserId={user?.id}
+                      onTail={handleTailClick}
+                      onSettle={handleSettlePotd}
+                      onViewDetails={handleViewDetails}
+                      formatOdds={formatOdds}
+                      getUserInitials={getUserInitials}
+                      getUserDisplayName={getUserDisplayName}
+                    />
+                  ))
+                )}
+
+                {/* Settled POTD Bets */}
+                {settledPotdBets.length > 0 && (
+                  <div className="space-y-2 pt-4 border-t">
+                    <h5 className="text-sm font-medium text-muted-foreground">Recently Settled</h5>
+                    {settledPotdBets.slice(0, 5).map((bet) => (
+                      <PotdBetCard
+                        key={bet.id}
+                        bet={bet}
+                        category={potdCategories.find(c => c.id === bet.playOfDayCategory)}
+                        currentUserId={user?.id}
+                        onTail={handleTailClick}
+                        onSettle={handleSettlePotd}
+                        onViewDetails={handleViewDetails}
+                        formatOdds={formatOdds}
+                        getUserInitials={getUserInitials}
+                        getUserDisplayName={getUserDisplayName}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         )}
@@ -593,7 +858,212 @@ export default function SocialDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Settle POTD Dialog */}
+      <Dialog open={settleDialogOpen} onOpenChange={setSettleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Settle Play of the Day
+            </DialogTitle>
+            <DialogDescription>
+              Mark this bet's result to update the category stats.
+            </DialogDescription>
+          </DialogHeader>
+          {betToSettle && (
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline">{betToSettle.sport}</Badge>
+                    <span className="font-mono font-semibold">{formatOdds(betToSettle.openingOdds)}</span>
+                  </div>
+                  <p className="font-medium">{betToSettle.team}</p>
+                  {betToSettle.game && (
+                    <p className="text-sm text-muted-foreground">{betToSettle.game}</p>
+                  )}
+                  <div className="flex items-center gap-2 pt-2 text-sm text-muted-foreground">
+                    <span>Stake: ${betToSettle.stake}</span>
+                    {betToSettle.potentialWin && (
+                      <>
+                        <span>|</span>
+                        <span>To Win: ${betToSettle.potentialWin}</span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">Result:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant="outline"
+                    className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30"
+                    onClick={() => handleConfirmSettle('won')}
+                    disabled={settlePotdMutation.isPending}
+                    data-testid="button-settle-won"
+                  >
+                    {settlePotdMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                    Won
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onClick={() => handleConfirmSettle('lost')}
+                    disabled={settlePotdMutation.isPending}
+                    data-testid="button-settle-lost"
+                  >
+                    {settlePotdMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4 mr-1" />}
+                    Lost
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleConfirmSettle('push')}
+                    disabled={settlePotdMutation.isPending}
+                    data-testid="button-settle-push"
+                  >
+                    Push
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSettleDialogOpen(false)} data-testid="button-cancel-settle">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// POTD Bet Card Component
+function PotdBetCard({
+  bet,
+  category,
+  currentUserId,
+  onTail,
+  onSettle,
+  onViewDetails,
+  formatOdds,
+  getUserInitials,
+  getUserDisplayName,
+}: {
+  bet: BetWithUser;
+  category?: PotdCategory;
+  currentUserId?: string;
+  onTail: (bet: BetWithUser) => void;
+  onSettle: (bet: BetWithUser) => void;
+  onViewDetails?: (bet: BetWithUser) => void;
+  formatOdds: (odds: string) => string;
+  getUserInitials: (u: UserType) => string;
+  getUserDisplayName: (u: UserType) => string;
+}) {
+  const isOwnBet = bet.userId === currentUserId;
+  const isActive = bet.status === 'active';
+
+  return (
+    <Card 
+      className={onViewDetails ? "hover-elevate cursor-pointer" : ""}
+      onClick={() => onViewDetails?.(bet)}
+      data-testid={`potd-bet-card-${bet.id}`}
+    >
+      <CardContent className="p-4 space-y-3">
+        {/* Header with user and category */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-7 w-7">
+              <AvatarImage src={bet.user.profileImageUrl || undefined} />
+              <AvatarFallback className="text-xs">{getUserInitials(bet.user)}</AvatarFallback>
+            </Avatar>
+            <span className="font-medium text-sm">{getUserDisplayName(bet.user)}</span>
+            {isOwnBet && <Badge variant="secondary" className="text-xs">You</Badge>}
+          </div>
+          {category && (
+            <Badge variant="outline" className="text-xs flex items-center gap-1">
+              <Star className="h-3 w-3" />
+              {category.displayName.replace(' Plays of the Day', '')}
+            </Badge>
+          )}
+        </div>
+        
+        {/* Bet details */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{bet.sport}</Badge>
+              <Badge variant="secondary">{bet.betType}</Badge>
+            </div>
+            <span className="font-mono font-semibold text-sm">{formatOdds(bet.openingOdds)}</span>
+          </div>
+          
+          <p className="font-medium">{bet.team}</p>
+          
+          {bet.game && (
+            <p className="text-sm text-muted-foreground">{bet.game}</p>
+          )}
+          
+          {bet.player && bet.market && (
+            <p className="text-sm text-muted-foreground">
+              {bet.player} {bet.overUnder} {bet.line} {bet.market}
+            </p>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2 border-t">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted-foreground">
+              Stake: <span className="font-medium text-foreground">${bet.stake}</span>
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {isActive && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSettle(bet);
+                  }}
+                  data-testid={`button-settle-potd-${bet.id}`}
+                >
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Settle
+                </Button>
+                {!isOwnBet && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTail(bet);
+                    }}
+                    data-testid={`button-tail-potd-${bet.id}`}
+                  >
+                    <Copy className="h-3 w-3 mr-1" />
+                    Tail
+                  </Button>
+                )}
+              </>
+            )}
+            
+            {!isActive && (
+              <Badge variant={bet.result === 'won' ? 'default' : bet.result === 'lost' ? 'destructive' : 'secondary'}>
+                {bet.result === 'won' && <Check className="h-3 w-3 mr-1" />}
+                {bet.result === 'lost' && <X className="h-3 w-3 mr-1" />}
+                {bet.result || bet.status}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

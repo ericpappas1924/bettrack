@@ -200,12 +200,12 @@ async function trackNBABet(
       betId,
       gameId: game.id,
       matchup: `${game.visitor_team.full_name} @ ${game.home_team.full_name}`,
-      score: `${game.visitor_team_score}-${game.home_team_score}`
+      score: `${ballDontLie.getAwayScore(game)}-${ballDontLie.getHomeScore(game)}`
     });
     
-    // Get current scores
-    const awayScore = game.visitor_team_score;
-    const homeScore = game.home_team_score;
+    // Get current scores (using helper to handle NBA/NCAAB field differences)
+    const awayScore = ballDontLie.getAwayScore(game);
+    const homeScore = ballDontLie.getHomeScore(game);
     const gameStatus = ballDontLie.getGameStatusMessage(game);
     const isLive = ballDontLie.isGameLive(game);
     const isComplete = ballDontLie.isGameCompleted(game);
@@ -416,12 +416,12 @@ async function trackNCAABBet(
       betId,
       gameId: game.id,
       matchup: `${game.visitor_team.full_name} @ ${game.home_team.full_name}`,
-      score: `${game.visitor_team_score}-${game.home_team_score}`
+      score: `${ballDontLie.getAwayScore(game)}-${ballDontLie.getHomeScore(game)}`
     });
     
-    // Get current scores
-    const awayScore = game.visitor_team_score;
-    const homeScore = game.home_team_score;
+    // Get current scores (using helper to handle NBA/NCAAB field differences)
+    const awayScore = ballDontLie.getAwayScore(game);
+    const homeScore = ballDontLie.getHomeScore(game);
     const gameStatus = ballDontLie.getGameStatusMessage(game);
     const isLive = ballDontLie.isGameLive(game);
     const isComplete = ballDontLie.isGameCompleted(game);

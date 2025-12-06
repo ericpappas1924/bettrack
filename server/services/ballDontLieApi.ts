@@ -66,10 +66,28 @@ export interface BallDontLieGame {
   period_detail: string | null;
   datetime: string | null;
   postseason: boolean;
-  home_team_score: number;
-  visitor_team_score: number;
+  // NBA uses home_team_score/visitor_team_score
+  home_team_score?: number;
+  visitor_team_score?: number;
+  // NCAAB uses home_score/away_score
+  home_score?: number;
+  away_score?: number;
   home_team: BallDontLieTeam;
   visitor_team: BallDontLieTeam;
+}
+
+/**
+ * Helper to get home score from game (handles both NBA and NCAAB field names)
+ */
+export function getHomeScore(game: BallDontLieGame): number {
+  return game.home_score ?? game.home_team_score ?? 0;
+}
+
+/**
+ * Helper to get away/visitor score from game (handles both NBA and NCAAB field names)
+ */
+export function getAwayScore(game: BallDontLieGame): number {
+  return game.away_score ?? game.visitor_team_score ?? 0;
 }
 
 export interface BallDontLieBoxScore {
@@ -79,14 +97,32 @@ export interface BallDontLieBoxScore {
   period: number;
   time: string;
   postseason: boolean;
-  home_team_score: number;
-  visitor_team_score: number;
+  // NBA uses home_team_score/visitor_team_score
+  home_team_score?: number;
+  visitor_team_score?: number;
+  // NCAAB uses home_score/away_score
+  home_score?: number;
+  away_score?: number;
   home_team: BallDontLieTeam & {
     players: BallDontLiePlayerStats[];
   };
   visitor_team: BallDontLieTeam & {
     players: BallDontLiePlayerStats[];
   };
+}
+
+/**
+ * Helper to get home score from box score (handles both NBA and NCAAB field names)
+ */
+export function getBoxScoreHomeScore(boxScore: BallDontLieBoxScore): number {
+  return boxScore.home_score ?? boxScore.home_team_score ?? 0;
+}
+
+/**
+ * Helper to get away/visitor score from box score (handles both NBA and NCAAB field names)
+ */
+export function getBoxScoreAwayScore(boxScore: BallDontLieBoxScore): number {
+  return boxScore.away_score ?? boxScore.visitor_team_score ?? 0;
 }
 
 /**
@@ -439,7 +475,7 @@ export function isGameLive(game: BallDontLieGame): boolean {
  */
 export function isGameCompleted(game: BallDontLieGame): boolean {
   // Game is completed if status is 'Final' or period is null after starting
-  return game.status === 'Final' || (game.period === null && game.home_team_score > 0);
+  return game.status === 'Final' || (game.period === null && getHomeScore(game) > 0);
 }
 
 /**
@@ -970,8 +1006,8 @@ export async function trackNCAABSpreadBet(
   const betOnHome = normalizeTeamName(betOnTeam).includes(normalizeTeamName(game.home_team.name)) ||
                     normalizeTeamName(game.home_team.name).includes(normalizeTeamName(betOnTeam));
   
-  const homeScore = boxScore?.home_team_score ?? game.home_team_score;
-  const awayScore = boxScore?.visitor_team_score ?? game.visitor_team_score;
+  const homeScore = boxScore ? getBoxScoreHomeScore(boxScore) : getHomeScore(game);
+  const awayScore = boxScore ? getBoxScoreAwayScore(boxScore) : getAwayScore(game);
   
   // Calculate margin from bet perspective
   // If bet is home -2.5, home needs to win by more than 2.5

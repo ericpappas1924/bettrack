@@ -202,6 +202,117 @@ export class DatabaseStorage implements IStorage {
       user: row.users
     }));
   }
+  
+  // Play of the Day features
+  async getPotdCategories(): Promise<PotdCategory[]> {
+    return await db.select().from(potdCategories).orderBy(potdCategories.name);
+  }
+  
+  async getPotdCategory(id: string): Promise<PotdCategory | undefined> {
+    const [category] = await db.select().from(potdCategories).where(eq(potdCategories.id, id));
+    return category;
+  }
+  
+  async createPotdCategory(category: InsertPotdCategory): Promise<PotdCategory> {
+    const [result] = await db.insert(potdCategories).values(category).returning();
+    return result;
+  }
+  
+  async updatePotdCategory(id: string, updates: Partial<PotdCategory>): Promise<PotdCategory | undefined> {
+    const [result] = await db
+      .update(potdCategories)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(potdCategories.id, id))
+      .returning();
+    return result;
+  }
+  
+  async getPotdBets(categoryId?: string): Promise<BetWithUser[]> {
+    const whereClause = categoryId 
+      ? and(isNotNull(bets.playOfDayCategory), eq(bets.playOfDayCategory, categoryId))
+      : isNotNull(bets.playOfDayCategory);
+    
+    const potdBets = await db
+      .select()
+      .from(bets)
+      .innerJoin(users, eq(bets.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(bets.markedAsPotdAt));
+    
+    return potdBets.map(row => ({
+      ...row.bets,
+      user: row.users
+    }));
+  }
+  
+  async markBetAsPotd(betId: string, categoryId: string, userId: string): Promise<Bet | undefined> {
+    const [result] = await db
+      .update(bets)
+      .set({
+        playOfDayCategory: categoryId,
+        markedAsPotdAt: new Date(),
+        markedAsPotdBy: userId
+      })
+      .where(eq(bets.id, betId))
+      .returning();
+    return result;
+  }
+  
+  async updatePotdCategoryStats(categoryId: string, result: 'won' | 'lost' | 'push', units: number): Promise<PotdCategory | undefined> {
+    const category = await this.getPotdCategory(categoryId);
+    if (!category) return undefined;
+    
+    let newStreak = category.streak;
+    let wins = category.wins;
+    let losses = category.losses;
+    let pushes = category.pushes;
+    let newUnits = category.units + units;
+    
+    if (result === 'won') {
+      wins++;
+      newStreak = newStreak >= 0 ? newStreak + 1 : 1;
+    } else if (result === 'lost') {
+      losses++;
+      newStreak = newStreak <= 0 ? newStreak - 1 : -1;
+    } else {
+      pushes++;
+      // Push doesn't affect streak
+    }
+    
+    return await this.updatePotdCategory(categoryId, {
+      wins,
+      losses,
+      pushes,
+      units: newUnits,
+      streak: newStreak
+    });
+  }
+  
+  async seedPotdCategories(): Promise<void> {
+    // Check if categories already exist
+    const existing = await this.getPotdCategories();
+    if (existing.length > 0) {
+      console.log('POTD categories already seeded');
+      return;
+    }
+    
+    // Seed with initial historical data
+    const initialCategories: InsertPotdCategory[] = [
+      { name: 'ncaab', displayName: 'NCAAB Plays of the Day', wins: 6, losses: 3, pushes: 0, units: 2.3, streak: -2 },
+      { name: 'nba', displayName: 'NBA Plays of the Day', wins: 19, losses: 13, pushes: 0, units: 2.58, streak: 3 },
+      { name: 'ncaaf', displayName: 'NCAAF Plays of the Day', wins: 9, losses: 6, pushes: 0, units: 1.83, streak: 2 },
+      { name: 'nfl', displayName: 'NFL Plays of the Day', wins: 10, losses: 8, pushes: 0, units: 2.29, streak: 2 },
+      { name: 'other', displayName: 'Other', wins: 2, losses: 1, pushes: 0, units: 0.8, streak: -1 },
+      { name: 'croke_nuke', displayName: 'Croke Thermonuclear Mega Nuke', wins: 1, losses: 0, pushes: 0, units: 1.0, streak: 1 },
+      { name: 'trevors_cant_lose', displayName: "Trevor's Can't Lose", wins: 1, losses: 1, pushes: 0, units: -0.22, streak: 1 },
+    ];
+    
+    for (const category of initialCategories) {
+      await this.createPotdCategory(category);
+    }
+    
+    console.log('POTD categories seeded successfully');
+  }
 }
 
 export const storage = new DatabaseStorage();

@@ -963,5 +963,147 @@ export async function registerRoutes(
     }
   });
 
+  // ================== PLAY OF THE DAY FEATURES ==================
+
+  // Seed POTD categories on startup (run once)
+  try {
+    await storage.seedPotdCategories();
+  } catch (error) {
+    console.error("Error seeding POTD categories:", error);
+  }
+
+  // Get all POTD categories with stats
+  app.get("/api/potd/categories", isAuthenticated, async (req: any, res) => {
+    try {
+      const categories = await storage.getPotdCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching POTD categories:", error);
+      res.status(500).json({ error: "Failed to fetch POTD categories" });
+    }
+  });
+
+  // Get all POTD bets (optionally filter by category)
+  app.get("/api/potd/bets", isAuthenticated, async (req: any, res) => {
+    try {
+      const categoryId = req.query.categoryId as string | undefined;
+      const potdBets = await storage.getPotdBets(categoryId);
+      res.json(potdBets);
+    } catch (error) {
+      console.error("Error fetching POTD bets:", error);
+      res.status(500).json({ error: "Failed to fetch POTD bets" });
+    }
+  });
+
+  // Mark a bet as Play of the Day
+  app.post("/api/bets/:id/mark-potd", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { categoryId } = z.object({ categoryId: z.string() }).parse(req.body);
+      
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      
+      // Verify category exists
+      const category = await storage.getPotdCategory(categoryId);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
+      // Mark as POTD
+      const updatedBet = await storage.markBetAsPotd(req.params.id, categoryId, userId);
+      
+      res.json(updatedBet);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      console.error("Error marking bet as POTD:", error);
+      res.status(500).json({ error: "Failed to mark bet as POTD" });
+    }
+  });
+
+  // Settle a POTD bet (any user can settle)
+  app.post("/api/potd/bets/:id/settle", isAuthenticated, async (req: any, res) => {
+    try {
+      const { result } = z.object({ 
+        result: z.enum(["won", "lost", "push"]) 
+      }).parse(req.body);
+      
+      const existingBet = await storage.getBet(req.params.id);
+      if (!existingBet) {
+        return res.status(404).json({ error: "Bet not found" });
+      }
+      
+      if (!existingBet.playOfDayCategory) {
+        return res.status(400).json({ error: "This bet is not a Play of the Day" });
+      }
+      
+      // Calculate profit
+      const stake = parseFloat(existingBet.stake);
+      const potentialWin = existingBet.potentialWin ? parseFloat(existingBet.potentialWin) : 0;
+      
+      let profit = 0;
+      let units = 0;
+      if (result === "won") {
+        profit = potentialWin;
+        units = potentialWin / stake; // Calculate units won
+      } else if (result === "lost") {
+        profit = -stake;
+        units = -1; // Lost 1 unit
+      }
+      // Push = 0 profit, 0 units
+      
+      // Update the bet
+      const updatedBet = await storage.updateBet(req.params.id, {
+        status: "settled",
+        result,
+        profit: profit.toFixed(2),
+        settledAt: new Date(),
+      });
+      
+      // Update category stats
+      await storage.updatePotdCategoryStats(existingBet.playOfDayCategory, result, units);
+      
+      res.json(updatedBet);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const validationError = fromZodError(error);
+        return res.status(400).json({ error: validationError.message });
+      }
+      console.error("Error settling POTD bet:", error);
+      res.status(500).json({ error: "Failed to settle POTD bet" });
+    }
+  });
+
+  // Get overall POTD stats (combined across all categories)
+  app.get("/api/potd/stats", isAuthenticated, async (req: any, res) => {
+    try {
+      const categories = await storage.getPotdCategories();
+      
+      const totalWins = categories.reduce((sum, c) => sum + c.wins, 0);
+      const totalLosses = categories.reduce((sum, c) => sum + c.losses, 0);
+      const totalPushes = categories.reduce((sum, c) => sum + c.pushes, 0);
+      const totalUnits = categories.reduce((sum, c) => sum + c.units, 0);
+      
+      res.json({
+        totalWins,
+        totalLosses,
+        totalPushes,
+        totalUnits: totalUnits.toFixed(2),
+        winRate: totalWins + totalLosses > 0 
+          ? ((totalWins / (totalWins + totalLosses)) * 100).toFixed(1) 
+          : '0',
+        record: `${totalWins}-${totalLosses}${totalPushes > 0 ? `-${totalPushes}` : ''}`,
+      });
+    } catch (error) {
+      console.error("Error fetching POTD stats:", error);
+      res.status(500).json({ error: "Failed to fetch POTD stats" });
+    }
+  });
+
   return httpServer;
 }

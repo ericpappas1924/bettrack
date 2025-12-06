@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator, RefreshCw, Trash2, Flame, Loader2 } from "lucide-react";
+import { Edit2, Check, X, Trophy, ThumbsDown, Minus, Calculator, RefreshCw, Trash2, Banknote, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -632,7 +632,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                       data-testid="button-show-potd-select"
                       className="text-amber-600 border-amber-500/50 hover:bg-amber-500/10"
                     >
-                      <Flame className="h-3 w-3 mr-1" />
+                      <Banknote className="h-3 w-3 mr-1" />
                       <span className="text-xs sm:text-sm">Mark as POTD</span>
                     </Button>
                   )}
@@ -686,7 +686,7 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
               <Separator />
               <div className="flex items-center gap-2">
                 <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 flex items-center gap-1">
-                  <Flame className="h-3 w-3" />
+                  <Banknote className="h-3 w-3" />
                   Play of the Day
                 </Badge>
                 <span className="text-xs text-muted-foreground">

@@ -901,16 +901,38 @@ function extractTeamFromBet(parsed: ParsedBet): string {
     // Check if this is a spread/total bet (has +/- followed by decimal/fraction, not just odds)
     // Examples:
     //   Spread: "TEN TITANS +4½-120" -> Keep "TEN TITANS +4.5"
+    //   Spread: "TEN TITANS -3-110" -> Keep "TEN TITANS -3"
     //   Moneyline: "KC CHIEFS -185" -> Keep "KC CHIEFS"
+    //   Moneyline: "IND COLTS -130" -> Keep "IND COLTS" (NOT -13!)
     //   Total: "Over 45.5-110" -> Keep "Over 45.5"
     
-    // Match spread pattern: team name + spread (must have .5, ½, or single digit 0-20) + odds
-    // Also capture bought point indicator: (B+½), (B+1), etc.
-    // This distinguishes spreads (+4.5, -7, +10½) from moneylines (-185, +150)
-    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-](?:[\d]{1,2}(?:[\.½¼][05]?)?))(?:\s*[+-]\d{3,})?\s*(\(B\+[^)]+\))?/);
+    // FIRST: Check if this is clearly a moneyline (3+ digit odds with no spread)
+    // Pattern: TEAM -130, TEAM +150, TEAM -185
+    // Key: Must have 3+ consecutive digits after +/-
+    const moneylineMatch = parsed.description.match(/^([A-Z\s]+)\s*([+-]\d{3,})(?:\s|$|-\d|$)/);
+    if (moneylineMatch) {
+      // This is a moneyline bet - just return the team name
+      const team = moneylineMatch[1].trim();
+      return team || parsed.description;
+    }
+    
+    // Match spread pattern: team name + spread (1-2 digits, optionally with .5/½) + odds
+    // Valid spreads: +4.5, -7, +10½, -3, +14.5, -2½, -1½
+    // Spreads are typically followed by odds like -110, -120
+    // Pattern: TEAM +4½-120, TEAM -7-110, TEAM +3.5-105
+    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-]\d{1,2}[½¼]?)(?:-\d{2,3})?\s*(\(B\+[^)]+\))?/);
     if (spreadMatch) {
       const team = spreadMatch[1].trim();
-      const spread = spreadMatch[2].replace('½', '.5').replace('¼', '.25');
+      const spreadRaw = spreadMatch[2];
+      
+      // Validate: if spread looks like it could be odds (e.g., starts at 100+), skip
+      const spreadNum = parseFloat(spreadRaw.replace('½', '.5').replace('¼', '.25'));
+      if (Math.abs(spreadNum) >= 100) {
+        // This is actually odds, not a spread - return just team
+        return team || parsed.description;
+      }
+      
+      const spread = spreadRaw.replace('½', '.5').replace('¼', '.25');
       const boughtPoint = spreadMatch[3] || ''; // (B+½), (B+1), etc.
       
       // Format bought point indicator more readably: (B+½) -> (Bought +0.5)
@@ -938,7 +960,7 @@ function extractTeamFromBet(parsed: ParsedBet): string {
       return `${direction} ${line}`;
     }
     
-    // Moneyline (just odds, no spread): "KC CHIEFS -185" -> "KC CHIEFS"
+    // Fallback: Moneyline - strip odds from team name
     const cleanTeam = parsed.description.replace(/\s*[+-]\d{3,}.*$/, '').trim();
     return cleanTeam || parsed.description;
   }

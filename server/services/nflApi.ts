@@ -578,15 +578,18 @@ function getSingleStatValue(playerStat: NFLPlayerStats, statType: string): numbe
  * Check if an NFL game is live
  */
 export function isNFLGameLive(boxScore: NFLBoxScore): boolean {
-  const status = boxScore.body.gameStatus;
-  return status === 'Live' || status === 'InProgress';
+  const status = boxScore.body.gameStatus?.toLowerCase() || '';
+  return status.includes('live') || status.includes('in progress');
 }
 
 /**
  * Check if an NFL game is completed
  */
 export function isNFLGameCompleted(boxScore: NFLBoxScore): boolean {
-  return boxScore.body.gameStatus === 'Completed' || boxScore.body.currentPeriod === 'Final';
+  const status = boxScore.body.gameStatus?.toLowerCase() || '';
+  return status.includes('completed') || 
+         status.includes('final') || 
+         boxScore.body.currentPeriod === 'Final';
 }
 
 /**
@@ -595,12 +598,30 @@ export function isNFLGameCompleted(boxScore: NFLBoxScore): boolean {
 export function getNFLGameStatus(boxScore: NFLBoxScore): string {
   const { currentPeriod, gameClock, gameStatus } = boxScore.body;
   
-  if (gameStatus === 'Completed' || currentPeriod === 'Final') {
+  // Check for completed game
+  if (gameStatus === 'Completed' || currentPeriod === 'Final' || gameStatus?.includes('Final')) {
     return 'Final';
   }
   
-  if (gameStatus === 'Live' && gameClock) {
-    return `${currentPeriod} ${gameClock}`;
+  // Check for live game - API returns "Live - In Progress"
+  const isLive = gameStatus?.toLowerCase().includes('live') || 
+                 gameStatus?.toLowerCase().includes('in progress');
+  
+  if (isLive && gameClock && currentPeriod) {
+    // Format quarter properly: "1st" -> "Q1", "2nd" -> "Q2", etc.
+    let quarter = currentPeriod;
+    if (currentPeriod.match(/1st|first/i)) quarter = 'Q1';
+    else if (currentPeriod.match(/2nd|second/i)) quarter = 'Q2';
+    else if (currentPeriod.match(/3rd|third/i)) quarter = 'Q3';
+    else if (currentPeriod.match(/4th|fourth/i)) quarter = 'Q4';
+    else if (currentPeriod.match(/ot|overtime/i)) quarter = 'OT';
+    
+    return `${quarter} ${gameClock}`;
+  }
+  
+  // Scheduled game
+  if (gameStatus?.toLowerCase().includes('scheduled')) {
+    return 'Pregame';
   }
   
   return gameStatus || 'Unknown';

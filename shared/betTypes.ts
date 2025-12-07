@@ -205,38 +205,57 @@ export function getSportFromText(text: string): Sport {
   
   if (nhlFullNames.some(team => upper.includes(team))) return SPORTS.NHL;
   
-  // Check NCAAF teams FIRST (before NBA/NFL) - college teams are more specific
-  // This prevents "Indiana vs Ohio State" from matching NBA "Indiana Pacers"
+  // Check NFL team nicknames FIRST (before NCAAF) - these are unique to NFL
+  // This prevents "Cincinnati Bengals" from matching NCAAF "Cincinnati Bearcats"
+  const nflNicknames = [
+    'BENGALS', 'BILLS', 'BROWNS', 'COLTS', 'JAGUARS', 'TEXANS', 'CHIEFS', 'RAIDERS',
+    'CHARGERS', 'BRONCOS', 'COWBOYS', 'GIANTS', 'EAGLES', 'COMMANDERS', 'REDSKINS',
+    'BEARS', 'LIONS', 'PACKERS', 'VIKINGS', 'FALCONS', 'PANTHERS', 'SAINTS',
+    'BUCCANEERS', 'BUCS', '49ERS', 'NINERS', 'SEAHAWKS', 'RAMS', 'CARDINALS',
+    'DOLPHINS', 'JETS', 'PATRIOTS', 'PATS', 'RAVENS', 'STEELERS', 'TITANS'
+  ];
+  
+  if (nflNicknames.some(team => upper.includes(team))) return SPORTS.NFL;
+  
+  // Check NCAAF teams (after NFL nicknames to avoid conflicts)
+  // This handles "Indiana vs Ohio State" type matchups
   const ncaafTeams = [
-    // Power 5 / Major programs
-    'ALABAMA', 'AUBURN', 'GEORGIA', 'FLORIDA', 'LSU', 'TENNESSEE', 'TEXAS A&M',
-    'NOTRE DAME', 'UCLA', 'PENN STATE', 'OREGON DUCKS', 'FLORIDA GATORS',
-    'TEXAS LONGHORNS', 'OKLAHOMA SOONERS', 'AUBURN', 'TENNESSEE VOLUNTEERS', 'FLORIDA STATE',
-    'MIAMI HURRICANES', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'KANSAS STATE',
-    'SOUTH CAROLINA', 'NORTH CAROLINA', 'VIRGINIA TECH', 'VIRGINIA',
-    'BAYLOR', 'SMU', 'TCU', 'TEXAS TECH', 'OKLAHOMA STATE',
-    'WASHINGTON HUSKIES', 'STANFORD', 'CALIFORNIA', 'ARIZONA STATE', 'ARIZONA',
-    'KENTUCKY', 'VANDERBILT', 'MISSISSIPPI', 'OLE MISS', 'MISS STATE',
-    'ARKANSAS', 'MISSOURI', 'TEXAS', 'OKLAHOMA', 'WEST VIRGINIA',
-    'CLEMSON', 'LOUISVILLE', 'DUKE', 'WAKE FOREST', 'NORTH CAROLINA STATE',
-    'BOSTON COLLEGE', 'SYRACUSE', 'PITTSBURGH', 'GEORGIA TECH', 'MIAMI',
-    'USC', 'OREGON', 'UTAH', 'COLORADO', 'UCLA',
-    'MICHIGAN', 'MICHIGAN STATE', 'OHIO STATE', 'PENN STATE', 'RUTGERS',
-    'MARYLAND', 'INDIANA', 'PURDUE', 'ILLINOIS', 'NORTHWESTERN',
-    'IOWA STATE', 'KANSAS', 'KANSAS STATE', 'OKLAHOMA STATE', 'TEXAS TECH',
-    'BOISE STATE', 'UTAH STATE', 'FRESNO STATE', 'SAN DIEGO STATE', 'NEVADA',
-    'UNLV', 'HAWAII', 'SAN JOSE STATE', 'WYOMING', 'COLORADO STATE',
-    'AIR FORCE', 'ARMY', 'NAVY', 'TULANE', 'MEMPHIS',
-    'SMU', 'TEMPLE', 'TULSA', 'UCF', 'USF',
-    'EAST CAROLINA', 'CINCINNATI', 'HOUSTON', 'TULSA', 'TULANE',
-    'JAMES MADISON', 'APPALACHIAN STATE', 'COASTAL CAROLINA', 'GEORGIA SOUTHERN', 'TROY',
-    'SOUTH ALABAMA', 'LOUISIANA', 'LOUISIANA MONROE', 'ARKANSAS STATE', 'TEXAS STATE',
-    'WESTERN MICHIGAN', 'CENTRAL MICHIGAN', 'EASTERN MICHIGAN', 'NORTHERN ILLINOIS', 'BALL STATE',
-    'BOWLING GREEN', 'BUFFALO', 'AKRON', 'KENT STATE', 'MIAMI OHIO',
-    'OHIO', 'TOLEDO', 'WESTERN MICHIGAN', 'NORTH TEXAS', 'RICE',
-    'UTEP', 'UTSA', 'CHARLOTTE', 'FIU', 'FAU',
-    'MARSHALL', 'MIDDLE TENNESSEE', 'OLD DOMINION', 'WESTERN KENTUCKY', 'LIBERTY',
-    'NEW MEXICO STATE', 'UTEP', 'UTSA', 'NORTH TEXAS', 'RICE'
+    // Power 5 / Major programs - use specific names to avoid city conflicts
+    'CRIMSON TIDE', 'WAR EAGLE', 'BULLDOGS', 'GATORS', 'FIGHTING TIGERS', 'VOLUNTEERS', 'AGGIES',
+    'FIGHTING IRISH', 'BRUINS', 'NITTANY LIONS', 'DUCKS', 'LONGHORNS', 'SOONERS',
+    'SEMINOLES', 'HURRICANES', 'BADGERS', 'HAWKEYES', 'CORNHUSKERS', 'WILDCATS',
+    'GAMECOCKS', 'TAR HEELS', 'HOKIES', 'CAVALIERS', 'BEARS', 'MUSTANGS', 'HORNED FROGS',
+    'RED RAIDERS', 'HUSKIES', 'CARDINAL', 'GOLDEN BEARS', 'SUN DEVILS',
+    'WILDCATS', 'COMMODORES', 'REBELS', 'RAZORBACKS', 'TIGERS', 'MOUNTAINEERS',
+    'CLEMSON TIGERS', 'CARDINALS', 'BLUE DEVILS', 'DEMON DEACONS', 'WOLFPACK',
+    'EAGLES', 'ORANGE', 'YELLOW JACKETS', 'TROJANS', 'UTES', 'BUFFALOES',
+    'WOLVERINES', 'SPARTANS', 'BUCKEYES', 'SCARLET KNIGHTS', 'TERRAPINS',
+    'HOOSIERS', 'BOILERMAKERS', 'FIGHTING ILLINI', 'JAYHAWKS', 'CYCLONES',
+    'BRONCOS', 'FRESNO STATE', 'AZTECS', 'WOLF PACK', 'REBELS',
+    'RAINBOW WARRIORS', 'COWBOYS', 'RAMS', 'FALCONS', 'BLACK KNIGHTS', 'MIDSHIPMEN',
+    'GREEN WAVE', 'BEARCATS', 'COUGARS', 'GOLDEN HURRICANE',
+    'KNIGHTS', 'BULLS', 'PIRATES', 'THUNDERING HERD', 'BLUE RAIDERS',
+    // Full school names for unambiguous matches
+    'ALABAMA', 'AUBURN', 'NOTRE DAME', 'PENN STATE', 'OHIO STATE', 'MICHIGAN',
+    'MICHIGAN STATE', 'FLORIDA STATE', 'TEXAS A&M', 'BOISE STATE', 'FRESNO STATE',
+    'SAN DIEGO STATE', 'UTAH STATE', 'COLORADO STATE', 'APPALACHIAN STATE',
+    'JAMES MADISON', 'COASTAL CAROLINA', 'GEORGIA SOUTHERN', 'GEORGIA TECH',
+    'VIRGINIA TECH', 'OKLAHOMA STATE', 'IOWA STATE', 'KANSAS STATE', 'TEXAS TECH',
+    'WEST VIRGINIA', 'BOSTON COLLEGE', 'WAKE FOREST', 'LOUISVILLE', 'SYRACUSE',
+    'CLEMSON', 'DUKE', 'NORTH CAROLINA', 'SOUTH CAROLINA', 'KENTUCKY', 'VANDERBILT',
+    'MISSISSIPPI STATE', 'OLE MISS', 'ARKANSAS', 'MISSOURI', 'LSU',
+    'TENNESSEE', 'FLORIDA', 'GEORGIA', 'PURDUE', 'ILLINOIS', 'NORTHWESTERN',
+    'INDIANA', 'MARYLAND', 'RUTGERS', 'WISCONSIN', 'IOWA', 'NEBRASKA', 'MINNESOTA',
+    'UCLA', 'USC', 'STANFORD', 'CALIFORNIA', 'OREGON', 'WASHINGTON', 'ARIZONA',
+    'ARIZONA STATE', 'UTAH', 'COLORADO', 'BAYLOR', 'TCU', 'SMU', 'TULANE', 'TULSA',
+    'UCF', 'USF', 'MEMPHIS', 'RICE', 'UTSA', 'UTEP', 'NORTH TEXAS', 'FAU', 'FIU',
+    'WESTERN KENTUCKY', 'MIDDLE TENNESSEE', 'MARSHALL', 'OLD DOMINION', 'LIBERTY',
+    'ARMY', 'NAVY', 'AIR FORCE', 'TEMPLE', 'EAST CAROLINA', 'HAWAII', 'NEVADA',
+    'UNLV', 'SAN JOSE STATE', 'WYOMING', 'NEW MEXICO', 'NEW MEXICO STATE',
+    'WESTERN MICHIGAN', 'CENTRAL MICHIGAN', 'EASTERN MICHIGAN', 'NORTHERN ILLINOIS',
+    'BALL STATE', 'BOWLING GREEN', 'AKRON', 'KENT STATE', 'MIAMI OHIO', 'OHIO',
+    'TOLEDO', 'TROY', 'SOUTH ALABAMA', 'LOUISIANA', 'UL MONROE', 'ARKANSAS STATE',
+    'TEXAS STATE', 'CHARLOTTE'
   ];
   
   if (ncaafTeams.some(team => upper.includes(team))) return SPORTS.NCAAF;
@@ -283,11 +302,28 @@ export function getSportFromText(text: string): Sport {
   const nflAbbreviations = [
     'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN',
     'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LAR', 'LV', 'MIA',
-    'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'
+    'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS',
+    'NOS' // New Orleans Saints abbreviation
   ];
   
   // Check for NFL abbreviations in parentheses (common in player props)
   if (nflAbbreviations.some(abbr => upper.includes(`(${abbr})`))) return SPORTS.NFL;
+  
+  // Check NBA team abbreviations in parentheses like "(NY)", "(BOS)", "(LAL)"
+  const nbaAbbreviations = [
+    'ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GS', 'GSW',
+    'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NO', 'NOP', 'NY', 'NYK',
+    'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SA', 'SAS', 'TOR', 'UTA', 'WAS'
+  ];
+  
+  // Check for NBA abbreviations - but only if we didn't already match NFL
+  // Need to check context (basketball markets like Points, Rebounds, etc.)
+  if (nbaAbbreviations.some(abbr => upper.includes(`(${abbr})`))) {
+    // Could be NBA or a collision with another sport - check for basketball context
+    if (basketballKeywords.some(keyword => upper.includes(keyword))) {
+      return SPORTS.NBA;
+    }
+  }
   
   // Note: NCAAF teams already checked above (before NBA/NFL to avoid conflicts)
   

@@ -410,7 +410,9 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
         if (toWinMatch) {
           const team = toWinMatch[1].trim();
           const matchup = toWinMatch[2].trim();
-          const legText = `[NCAAF] ${gameMatchup} - ${team} to Win [Pending]`;
+          // Detect sport from game matchup
+          const detectedSport = getSportFromText(gameMatchup);
+          const legText = `[${detectedSport}] ${gameMatchup} - ${team} to Win [Pending]`;
           legs.push(legText);
           console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg: ${legText}`);
           i += 3; // Skip header, game, and To Win line

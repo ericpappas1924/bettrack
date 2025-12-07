@@ -1496,5 +1496,52 @@ export async function registerRoutes(
     }
   });
 
+  // Migration endpoint to fix NFL bets incorrectly tagged as NCAAF
+  app.post("/api/bets/fix-nfl-sports", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const allBets = await storage.getAllBets(userId);
+      
+      // NFL team abbreviations
+      const nflAbbreviations = ['ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN',
+        'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LAR', 'LV', 'MIA',
+        'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'];
+      
+      // NFL team full names
+      const nflTeams = ['BILLS', 'DOLPHINS', 'PATRIOTS', 'JETS', 'RAVENS', 'BENGALS', 'BROWNS', 'STEELERS',
+        'TEXANS', 'COLTS', 'JAGUARS', 'TITANS', 'BRONCOS', 'CHIEFS', 'RAIDERS', 'CHARGERS',
+        'COWBOYS', 'GIANTS', 'EAGLES', 'COMMANDERS', 'BEARS', 'LIONS', 'PACKERS', 'VIKINGS',
+        'FALCONS', 'PANTHERS', 'SAINTS', 'BUCCANEERS', 'CARDINALS', '49ERS', 'RAMS', 'SEAHAWKS'];
+      
+      const fixedBets: string[] = [];
+      
+      for (const bet of allBets) {
+        if (bet.sport !== 'NCAAF' && bet.sport !== 'Other') continue;
+        
+        const text = `${bet.description || ''} ${bet.game || ''}`.toUpperCase();
+        
+        // Check for NFL abbreviations in parentheses
+        const hasNflAbbr = nflAbbreviations.some(abbr => text.includes(`(${abbr})`));
+        
+        // Check for NFL team names
+        const hasNflTeam = nflTeams.some(team => text.includes(team));
+        
+        if (hasNflAbbr || hasNflTeam) {
+          await storage.updateBet(bet.id, { sport: 'NFL' });
+          fixedBets.push(`${bet.id}: ${bet.description?.substring(0, 40)}...`);
+        }
+      }
+      
+      console.log(`✅ Fixed ${fixedBets.length} bets to NFL`);
+      res.json({ 
+        message: `Fixed ${fixedBets.length} bets from NCAAF/Other to NFL`,
+        fixedBets 
+      });
+    } catch (error) {
+      console.error("Error fixing NFL sports:", error);
+      res.status(500).json({ error: "Failed to fix NFL sports" });
+    }
+  });
+
   return httpServer;
 }

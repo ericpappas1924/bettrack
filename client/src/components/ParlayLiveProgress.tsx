@@ -24,6 +24,13 @@ export interface ParlayLegLiveStat {
   gameStatus?: string;
   
   totalScore?: number;
+  
+  // Player prop specific
+  playerName?: string;
+  statType?: string;
+  currentValue?: number;
+  targetValue?: number;
+  progress?: number;
 }
 
 export interface ParlayLiveStats {
@@ -177,7 +184,30 @@ export function ParlayLiveProgress({ parlayStats, compact = false }: ParlayLiveP
                   </span>
                 )}
               </div>
-              {(leg.isLive || leg.isComplete) && leg.homeScore !== undefined && leg.awayScore !== undefined && (
+              {/* Player prop progress */}
+              {leg.betType === 'Player Prop' && leg.currentValue !== undefined && leg.targetValue !== undefined && (
+                <div className="mt-1 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium">
+                      {leg.currentValue} / {leg.targetValue} {leg.statType}
+                    </span>
+                    <span className={leg.isWinning ? 'text-green-600' : 'text-amber-600'}>
+                      {leg.progress !== undefined ? `${Math.round(leg.progress)}%` : ''}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={leg.progress || 0} 
+                    className={`h-1.5 ${leg.isWinning ? '[&>div]:bg-green-500' : '[&>div]:bg-amber-500'}`}
+                  />
+                  {leg.gameStatus && (
+                    <span className="text-xs text-muted-foreground">
+                      {leg.gameStatus}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Team game score */}
+              {leg.betType !== 'Player Prop' && (leg.isLive || leg.isComplete) && leg.homeScore !== undefined && leg.awayScore !== undefined && (
                 <div className="text-xs font-medium mt-1">
                   {leg.awayTeam} {leg.awayScore} - {leg.homeScore} {leg.homeTeam}
                   {leg.gameStatus && (

@@ -13,12 +13,15 @@ interface ParlayLeg {
   gameDate: Date | null;
   sport: string;
   team: string;           // Game matchup (for lookup) or team name
-  betTeam?: string;       // Actual team bet on (for spread bets)
-  betType: 'Moneyline' | 'Spread' | 'Total';
+  betTeam?: string;       // Actual team bet on (for spread bets) or player name (for props)
+  betType: 'Moneyline' | 'Spread' | 'Total' | 'Player Prop';
   line?: number;
-  overUnder?: 'Over' | 'Under';
+  overUnder?: 'over' | 'under';
   teaserAdjustment?: number;
   rawDescription: string;
+  // Player prop specific fields
+  playerName?: string;
+  statType?: string;
 }
 
 /**
@@ -41,7 +44,54 @@ export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
   });
   
   for (const legLine of lines) {
-    // Try Round Robin format first: [SPORT] Selection @ Odds - Matchup [Status]
+    // Try Player Prop format: "Player Name (TEAM) Over/Under Value Stat"
+    // Example: "Kirk Cousins (ATL) Over 208.5 Passing Yards"
+    // Example: "Bucky Irving (TB) Over 71.5 Rushing Yards"
+    const playerPropMatch = legLine.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(Over|Under)\s+([\d.]+)\s+(.+?)(?:\s*\[(?:Won|Lost|Pending|Push)\])?$/i);
+    if (playerPropMatch) {
+      const playerName = playerPropMatch[1].trim();
+      const teamAbbr = playerPropMatch[2].toUpperCase();
+      const overUnder = playerPropMatch[3].toLowerCase() as 'over' | 'under';
+      const targetValue = parseFloat(playerPropMatch[4]);
+      const statType = playerPropMatch[5].trim();
+      
+      // Detect sport from team abbreviation
+      const nflTeams = ['ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN', 'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LAR', 'LV', 'MIA', 'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WSH', 'WAS', 'NOS'];
+      const nbaTeams = ['ATL', 'BOS', 'BKN', 'CHA', 'CHI', 'CLE', 'DAL', 'DEN', 'DET', 'GS', 'GSW', 'HOU', 'IND', 'LAC', 'LAL', 'MEM', 'MIA', 'MIL', 'MIN', 'NO', 'NOP', 'NY', 'NYK', 'OKC', 'ORL', 'PHI', 'PHX', 'POR', 'SAC', 'SA', 'SAS', 'TOR', 'UTA', 'WAS'];
+      
+      // Determine sport based on stat type and team
+      let sport = 'NFL';
+      const statLower = statType.toLowerCase();
+      if (statLower.includes('points') || statLower.includes('rebounds') || statLower.includes('assists') || 
+          statLower.includes('pts') || statLower.includes('reb') || statLower.includes('ast') ||
+          statLower.includes('pra') || statLower.includes('threes') || statLower.includes('steals') ||
+          statLower.includes('blocks')) {
+        sport = 'NBA'; // Basketball stats
+      } else if (statLower.includes('passing') || statLower.includes('rushing') || statLower.includes('receiving') ||
+                 statLower.includes('yards') || statLower.includes('receptions') || statLower.includes('carries') ||
+                 statLower.includes('touchdowns') || statLower.includes('completions')) {
+        sport = 'NFL'; // Football stats
+      }
+      
+      console.log(`   📍 Parsed Player Prop leg: ${playerName} ${overUnder} ${targetValue} ${statType} (${teamAbbr}, ${sport})`);
+      
+      legs.push({
+        gameDate: new Date(),
+        sport,
+        team: teamAbbr, // Use team abbreviation for lookup
+        betTeam: playerName, // Player name
+        betType: 'Player Prop',
+        line: targetValue,
+        overUnder,
+        teaserAdjustment: undefined,
+        rawDescription: `${playerName} (${teamAbbr}) ${overUnder} ${targetValue} ${statType}`,
+        playerName,
+        statType
+      });
+      continue;
+    }
+    
+    // Try Round Robin format: [SPORT] Selection @ Odds - Matchup [Status]
     // Example: [NCAAB] Indiana -2.5 @ +200 - Louisville vs Indiana [Pending]
     const rrMatch = legLine.match(/\[([^\]]+)\]\s+(.+?)\s+@\s+([+-]\d+)\s+-\s+(.+?)\s*\[(Won|Lost|Pending|Push)\]/i);
     if (rrMatch) {
@@ -210,9 +260,12 @@ export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
  * Track a single parlay/teaser leg
  * Creates a temporary bet object to reuse existing tracking logic
  */
-async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; isWon: boolean; isPush: boolean } | null> {
+async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; isWon: boolean; isPush: boolean; currentValue?: number; targetValue?: number; progress?: number } | null> {
   console.log(`      Team: ${leg.team}`);
   console.log(`      Type: ${leg.betType}, Line: ${leg.line || 'N/A'}`);
+  if (leg.playerName) {
+    console.log(`      Player: ${leg.playerName}, Stat: ${leg.statType}`);
+  }
   
   // Need game date to find the game
   if (!leg.gameDate) {
@@ -239,29 +292,46 @@ async function trackParlayLeg(leg: ParlayLeg): Promise<{ isComplete: boolean; is
   }
   
   // Create temporary bet object for tracking
-  const tempBet = {
+  const tempBet: any = {
     id: 'parlay-leg-temp',
     sport: leg.sport,
     game: fullMatchup,
-    team: leg.team.includes(' vs ') ? 'TOTAL' : leg.team, // For totals, use "TOTAL" as team
-    betType: leg.betType,
+    team: leg.team.includes(' vs ') ? 'TOTAL' : leg.betTeam || leg.team,
+    betType: leg.betType === 'Player Prop' ? 'Player Prop' : leg.betType,
     status: 'active',
-    gameStartTime: leg.gameDate
+    gameStartTime: leg.gameDate,
+    // Add player prop details for tracking
+    description: leg.rawDescription
   };
+  
+  // For player props, add player-specific data to notes (parsed by tracker)
+  if (leg.betType === 'Player Prop' && leg.playerName && leg.statType) {
+    tempBet.notes = `Player: ${leg.playerName}\nStat: ${leg.statType}\nLine: ${leg.line}\nOver/Under: ${leg.overUnder}`;
+    tempBet.player = leg.playerName;
+    tempBet.market = leg.statType;
+    tempBet.line = leg.line?.toString();
+    tempBet.overUnder = leg.overUnder === 'over' ? 'Over' : 'Under';
+  }
   
   // Use existing tracking logic
   const result = await trackBetLiveStats(tempBet);
   if (!result) {
-    console.log(`      ⏳ Game not complete yet`);
+    console.log(`      ⏳ Game not complete yet or no data`);
     return { isComplete: false, isWon: false, isPush: false };
   }
   
   console.log(`      ${result.isComplete ? '✅' : '⏳'} Complete: ${result.isComplete}, Winning: ${result.isWinning}`);
+  if (result.currentValue !== undefined) {
+    console.log(`      📊 Progress: ${result.currentValue}/${result.targetValue} (${result.progress}%)`);
+  }
   
   return {
     isComplete: result.isComplete,
     isWon: result.isWinning,
-    isPush: false // TODO: Detect push scenarios
+    isPush: false, // TODO: Detect push scenarios
+    currentValue: result.currentValue,
+    targetValue: result.targetValue,
+    progress: result.progress
   };
 }
 
@@ -290,6 +360,13 @@ export interface ParlayLegLiveStat {
   homeScore?: number;
   awayScore?: number;
   gameStatus?: string;
+  
+  // Player prop specific
+  playerName?: string;
+  statType?: string;
+  currentValue?: number;
+  targetValue?: number;
+  progress?: number;
   
   // For totals
   totalScore?: number;
@@ -387,7 +464,10 @@ export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat
     // Create temporary bet object for tracking
     // For spread bets, use betTeam if available; for totals use 'TOTAL'
     let teamForTracking: string;
-    if (leg.betType === 'Spread' && leg.betTeam) {
+    if (leg.betType === 'Player Prop' && leg.playerName) {
+      // Player prop - use player name as team for tracking
+      teamForTracking = leg.playerName;
+    } else if (leg.betType === 'Spread' && leg.betTeam) {
       // Round Robin spread bet - use the team we're betting on
       teamForTracking = `${leg.betTeam} ${leg.line !== undefined ? (leg.line >= 0 ? '+' : '') + leg.line : ''}`;
     } else if (leg.betType === 'Total') {
@@ -399,15 +479,30 @@ export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat
       teamForTracking = leg.team;
     }
     
-    const tempBet = {
+    const tempBet: any = {
       id: `parlay-${betId}-leg-${i}`,
       sport: leg.sport,
       game: fullMatchup,
       team: teamForTracking,
       betType: leg.betType === 'Spread' ? 'Straight' : leg.betType, // Map to tracker bet types
       status: 'active',
-      gameStartTime: leg.gameDate
+      gameStartTime: leg.gameDate,
+      description: leg.rawDescription
     };
+    
+    // Add player prop specific fields
+    if (leg.betType === 'Player Prop' && leg.playerName) {
+      tempBet.player = leg.playerName;
+      tempBet.market = leg.statType;
+      tempBet.line = leg.line?.toString();
+      tempBet.overUnder = leg.overUnder === 'over' ? 'Over' : 'Under';
+      tempBet.notes = `Player: ${leg.playerName}\nStat: ${leg.statType}\nLine: ${leg.line}\nOver/Under: ${leg.overUnder}`;
+      
+      // Add player prop fields for live stat tracker
+      baseStat.playerName = leg.playerName;
+      baseStat.statType = leg.statType;
+      baseStat.targetValue = leg.line;
+    }
     
     // Get live stats using existing tracker
     const result = await trackBetLiveStats(tempBet);
@@ -423,13 +518,24 @@ export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat
       baseStat.gameStatus = result.gameStatus;
       baseStat.totalScore = result.homeScore + result.awayScore;
       
+      // Add player prop progress data
+      if (result.currentValue !== undefined) {
+        baseStat.currentValue = result.currentValue;
+        baseStat.targetValue = result.targetValue;
+        baseStat.progress = result.progress;
+      }
+      
       if (result.isComplete) {
         baseStat.status = result.isWinning ? 'won' : 'lost';
       } else if (result.isLive) {
         baseStat.status = 'live';
       }
       
-      console.log(`      ${result.isLive ? '🔴 LIVE' : result.isComplete ? '✅ Complete' : '⏳ Pending'} - ${result.isWinning ? 'Winning' : 'Losing'}`);
+      if (leg.betType === 'Player Prop' && result.currentValue !== undefined) {
+        console.log(`      ${result.isLive ? '🔴 LIVE' : result.isComplete ? '✅ Complete' : '⏳ Pending'} - ${result.currentValue}/${result.targetValue} (${result.progress}%) ${result.isWinning ? '✅ Hitting' : '❌ Not Hitting'}`);
+      } else {
+        console.log(`      ${result.isLive ? '🔴 LIVE' : result.isComplete ? '✅ Complete' : '⏳ Pending'} - ${result.isWinning ? 'Winning' : 'Losing'}`);
+      }
     } else {
       console.log(`      ⏳ Could not get live stats`);
     }

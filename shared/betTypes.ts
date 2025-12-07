@@ -279,6 +279,16 @@ export function getSportFromText(text: string): Sport {
   
   if (nflTeams.some(team => upper.includes(team))) return SPORTS.NFL;
   
+  // Check NFL team abbreviations in parentheses like "(CIN)", "(JAX)", "(ATL)"
+  const nflAbbreviations = [
+    'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE', 'DAL', 'DEN',
+    'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC', 'LAC', 'LAR', 'LV', 'MIA',
+    'MIN', 'NE', 'NO', 'NYG', 'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'
+  ];
+  
+  // Check for NFL abbreviations in parentheses (common in player props)
+  if (nflAbbreviations.some(abbr => upper.includes(`(${abbr})`))) return SPORTS.NFL;
+  
   // Note: NCAAF teams already checked above (before NBA/NFL to avoid conflicts)
   
   // Check for football (NFL or NCAAF based on context)

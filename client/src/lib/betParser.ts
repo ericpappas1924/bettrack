@@ -644,11 +644,28 @@ export function parseBetPaste(rawText: string): ParseResult {
                  marketUpper.includes('PASSING YARDS') || marketUpper.includes('RECEPTIONS') ||
                  marketUpper.includes('CARRIES') || marketUpper.includes('TOUCHDOWNS') ||
                  marketUpper.includes('PASS INTERCEPTIONS') || marketUpper.includes('COMPLETIONS')) {
-          // This is definitely football - check if NCAAF or NFL
-          sport = game ? getSportFromText(game) : SPORTS.NCAAF; // Default to NCAAF for college teams
-          if (sport === 'Other' || sport === 'NBA') {
-            // Force to NCAAF if we have football-specific markets (likely college)
-            sport = SPORTS.NCAAF;
+          // This is definitely football - try to determine NFL vs NCAAF
+          // First check the game text
+          sport = game ? getSportFromText(game) : SPORTS.OTHER;
+          
+          // If couldn't determine from game, check player team abbreviation
+          if (sport === 'Other' || sport === 'NBA' || sport === 'NCAAB') {
+            // Check if playerTeam abbreviation matches NFL teams
+            const nflTeamAbbreviations: Record<string, boolean> = {
+              'ARI': true, 'ATL': true, 'BAL': true, 'BUF': true, 'CAR': true, 'CHI': true,
+              'CIN': true, 'CLE': true, 'DAL': true, 'DEN': true, 'DET': true, 'GB': true,
+              'HOU': true, 'IND': true, 'JAX': true, 'KC': true, 'LAC': true, 'LAR': true,
+              'LV': true, 'MIA': true, 'MIN': true, 'NE': true, 'NO': true, 'NYG': true,
+              'NYJ': true, 'PHI': true, 'PIT': true, 'SEA': true, 'SF': true, 'TB': true,
+              'TEN': true, 'WAS': true
+            };
+            
+            if (playerTeam && nflTeamAbbreviations[playerTeam.toUpperCase()]) {
+              sport = SPORTS.NFL;
+            } else {
+              // Default to NFL for pro football props (more common than college)
+              sport = SPORTS.NFL;
+            }
           }
         } else {
           // Re-detect sport by checking the game matchup first, then the block

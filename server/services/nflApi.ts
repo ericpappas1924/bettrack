@@ -165,11 +165,85 @@ async function makeNFLApiRequest(endpoint: string, params: Record<string, any> =
   throw new Error('NFL API request failed after all retries');
 }
 
+// NFL Team name to abbreviation mapping
+const NFL_TEAM_ABBREVIATIONS: Record<string, string> = {
+  // Full names
+  'ARIZONA CARDINALS': 'ARI', 'ATLANTA FALCONS': 'ATL', 'BALTIMORE RAVENS': 'BAL',
+  'BUFFALO BILLS': 'BUF', 'CAROLINA PANTHERS': 'CAR', 'CHICAGO BEARS': 'CHI',
+  'CINCINNATI BENGALS': 'CIN', 'CLEVELAND BROWNS': 'CLE', 'DALLAS COWBOYS': 'DAL',
+  'DENVER BRONCOS': 'DEN', 'DETROIT LIONS': 'DET', 'GREEN BAY PACKERS': 'GB',
+  'HOUSTON TEXANS': 'HOU', 'INDIANAPOLIS COLTS': 'IND', 'JACKSONVILLE JAGUARS': 'JAX',
+  'KANSAS CITY CHIEFS': 'KC', 'LOS ANGELES CHARGERS': 'LAC', 'LOS ANGELES RAMS': 'LAR',
+  'LAS VEGAS RAIDERS': 'LV', 'MIAMI DOLPHINS': 'MIA', 'MINNESOTA VIKINGS': 'MIN',
+  'NEW ENGLAND PATRIOTS': 'NE', 'NEW ORLEANS SAINTS': 'NO', 'NEW YORK GIANTS': 'NYG',
+  'NEW YORK JETS': 'NYJ', 'PHILADELPHIA EAGLES': 'PHI', 'PITTSBURGH STEELERS': 'PIT',
+  'SAN FRANCISCO 49ERS': 'SF', 'SEATTLE SEAHAWKS': 'SEA', 'TAMPA BAY BUCCANEERS': 'TB',
+  'TENNESSEE TITANS': 'TEN', 'WASHINGTON COMMANDERS': 'WSH', 'WASHINGTON': 'WSH',
+  // City names
+  'ARIZONA': 'ARI', 'ATLANTA': 'ATL', 'BALTIMORE': 'BAL', 'BUFFALO': 'BUF',
+  'CAROLINA': 'CAR', 'CHICAGO': 'CHI', 'CINCINNATI': 'CIN', 'CLEVELAND': 'CLE',
+  'DALLAS': 'DAL', 'DENVER': 'DEN', 'DETROIT': 'DET', 'GREEN BAY': 'GB',
+  'HOUSTON': 'HOU', 'INDIANAPOLIS': 'IND', 'JACKSONVILLE': 'JAX', 'KANSAS CITY': 'KC',
+  'LAS VEGAS': 'LV', 'MIAMI': 'MIA', 'MINNESOTA': 'MIN', 'NEW ENGLAND': 'NE',
+  'NEW ORLEANS': 'NO', 'PHILADELPHIA': 'PHI', 'PITTSBURGH': 'PIT', 'SAN FRANCISCO': 'SF',
+  'SEATTLE': 'SEA', 'TAMPA BAY': 'TB', 'TENNESSEE': 'TEN',
+  // Nicknames only
+  'CARDINALS': 'ARI', 'FALCONS': 'ATL', 'RAVENS': 'BAL', 'BILLS': 'BUF',
+  'PANTHERS': 'CAR', 'BEARS': 'CHI', 'BENGALS': 'CIN', 'BROWNS': 'CLE',
+  'COWBOYS': 'DAL', 'BRONCOS': 'DEN', 'LIONS': 'DET', 'PACKERS': 'GB',
+  'TEXANS': 'HOU', 'COLTS': 'IND', 'JAGUARS': 'JAX', 'CHIEFS': 'KC',
+  'CHARGERS': 'LAC', 'RAMS': 'LAR', 'RAIDERS': 'LV', 'DOLPHINS': 'MIA',
+  'VIKINGS': 'MIN', 'PATRIOTS': 'NE', 'PATS': 'NE', 'SAINTS': 'NO',
+  'GIANTS': 'NYG', 'JETS': 'NYJ', 'EAGLES': 'PHI', 'STEELERS': 'PIT',
+  '49ERS': 'SF', 'NINERS': 'SF', 'SEAHAWKS': 'SEA', 'BUCCANEERS': 'TB', 'BUCS': 'TB',
+  'TITANS': 'TEN', 'COMMANDERS': 'WSH',
+  // Abbreviations (for when input is already abbreviated)
+  'ARI': 'ARI', 'ATL': 'ATL', 'BAL': 'BAL', 'BUF': 'BUF', 'CAR': 'CAR',
+  'CHI': 'CHI', 'CIN': 'CIN', 'CLE': 'CLE', 'DAL': 'DAL', 'DEN': 'DEN',
+  'DET': 'DET', 'GB': 'GB', 'HOU': 'HOU', 'IND': 'IND', 'JAX': 'JAX',
+  'KC': 'KC', 'LAC': 'LAC', 'LAR': 'LAR', 'LV': 'LV', 'MIA': 'MIA',
+  'MIN': 'MIN', 'NE': 'NE', 'NO': 'NO', 'NYG': 'NYG', 'NYJ': 'NYJ',
+  'PHI': 'PHI', 'PIT': 'PIT', 'SF': 'SF', 'SEA': 'SEA', 'TB': 'TB',
+  'TEN': 'TEN', 'WSH': 'WSH', 'WAS': 'WSH'
+};
+
+/**
+ * Get NFL team abbreviation from any team name format
+ */
+function getNFLTeamAbbreviation(teamName: string): string | null {
+  const upper = teamName.toUpperCase().trim();
+  
+  // Direct match
+  if (NFL_TEAM_ABBREVIATIONS[upper]) {
+    return NFL_TEAM_ABBREVIATIONS[upper];
+  }
+  
+  // Try to find partial match
+  for (const [key, abbr] of Object.entries(NFL_TEAM_ABBREVIATIONS)) {
+    if (upper.includes(key) || key.includes(upper)) {
+      return abbr;
+    }
+  }
+  
+  return null;
+}
+
 /**
  * Find an NFL game by team names and date
  */
-export async function findNFLGameByTeams(team1: string, team2: string, gameDate?: Date): Promise<{ gameID: string; home: string; away: string } | null> {
+export async function findNFLGameByTeams(team1: string, team2: string, gameDate?: Date): Promise<{ gameID: string; home: string; away: string; gameTime?: string; gameDate?: string; gameStatus?: string } | null> {
   console.log(`🔍 [NFL-API] findNFLGameByTeams:`, { team1, team2, gameDate });
+  
+  // Get team abbreviations
+  const team1Abbr = getNFLTeamAbbreviation(team1);
+  const team2Abbr = getNFLTeamAbbreviation(team2);
+  
+  console.log(`🏈 [NFL-API] Team abbreviations: ${team1} → ${team1Abbr}, ${team2} → ${team2Abbr}`);
+  
+  if (!team1Abbr || !team2Abbr) {
+    console.log(`❌ [NFL-API] Could not determine team abbreviations`);
+    return null;
+  }
   
   // Use gameDate or default to today
   const searchDate = gameDate ? new Date(gameDate) : new Date();
@@ -200,22 +274,15 @@ export async function findNFLGameByTeams(team1: string, team2: string, gameDate?
     const games = Array.isArray(response.body) ? response.body : Object.values(response.body);
     console.log(`✅ [NFL-API] Found ${games.length} game(s) for ${dateStr}`);
     
-    // Normalize team names for comparison
-    const normalizeTeam = (team: string) => team.toUpperCase().replace(/[^A-Z]/g, '');
-    const team1Norm = normalizeTeam(team1);
-    const team2Norm = normalizeTeam(team2);
-    
-    // Search for matching game
+    // Search for matching game using abbreviations
     for (const game of games) {
-      const homeNorm = normalizeTeam(game.home || game.teamIDHome || '');
-      const awayNorm = normalizeTeam(game.away || game.teamIDAway || '');
+      const homeAbbr = game.home?.toUpperCase();
+      const awayAbbr = game.away?.toUpperCase();
       
+      // Check if teams match (in either order)
       const match = (
-        (homeNorm.includes(team1Norm) || team1Norm.includes(homeNorm)) &&
-        (awayNorm.includes(team2Norm) || team2Norm.includes(awayNorm))
-      ) || (
-        (homeNorm.includes(team2Norm) || team2Norm.includes(homeNorm)) &&
-        (awayNorm.includes(team1Norm) || team1Norm.includes(awayNorm))
+        (homeAbbr === team1Abbr && awayAbbr === team2Abbr) ||
+        (homeAbbr === team2Abbr && awayAbbr === team1Abbr)
       );
       
       if (match) {
@@ -223,13 +290,17 @@ export async function findNFLGameByTeams(team1: string, team2: string, gameDate?
         console.log(`✅ [NFL-API] Game found:`, {
           gameID,
           matchup: `${game.away} @ ${game.home}`,
-          gameTime: game.gameTime || game.gameDate
+          gameTime: game.gameTime || game.gameDate,
+          gameStatus: game.gameStatus
         });
         
         return {
           gameID,
-          home: game.home || game.teamIDHome,
-          away: game.away || game.teamIDAway
+          home: game.home,
+          away: game.away,
+          gameTime: game.gameTime,
+          gameDate: game.gameDate,
+          gameStatus: game.gameStatus
         };
       }
     }

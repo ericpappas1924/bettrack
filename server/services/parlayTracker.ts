@@ -165,6 +165,36 @@ export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
       console.log(`   ⚠️  Could not parse date: ${dateStr}`);
     }
     
+    const sport = sportTag.toUpperCase();
+    
+    // Check if this is a player prop in standard parlay format
+    // Format: "Jayden Daniels (WAS) Under 214.5 Passing Yards"
+    const playerPropInParlay = betDetails.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(Over|Under)\s+([\d.]+)\s+(.+?)(?:\s*[+-]\d+)?$/i);
+    if (playerPropInParlay) {
+      const playerName = playerPropInParlay[1].trim();
+      const teamAbbr = playerPropInParlay[2].toUpperCase();
+      const overUnder = playerPropInParlay[3].toLowerCase() as 'over' | 'under';
+      const targetValue = parseFloat(playerPropInParlay[4]);
+      const statType = playerPropInParlay[5].trim();
+      
+      console.log(`   📍 Parsed Player Prop (parlay format): ${playerName} ${overUnder} ${targetValue} ${statType} (${teamAbbr})`);
+      
+      legs.push({
+        gameDate,
+        sport,
+        team: teamAbbr,
+        betTeam: playerName,
+        betType: 'Player Prop',
+        line: targetValue,
+        overUnder,
+        teaserAdjustment: undefined,
+        rawDescription: `${playerName} (${teamAbbr}) ${overUnder} ${targetValue} ${statType}`,
+        playerName,
+        statType
+      });
+      continue;
+    }
+    
     // Extract team name
     let team = '';
     
@@ -191,8 +221,6 @@ export function parseParlayLegsFromNotes(notes: string): ParlayLeg[] {
       console.log(`   ⚠️  Could not parse team from: ${betDetails}`);
       continue;
     }
-    
-    const sport = sportTag.toUpperCase();
     
     // Determine bet type and extract details
     let betType: 'Moneyline' | 'Spread' | 'Total' = 'Moneyline';

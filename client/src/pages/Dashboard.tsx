@@ -362,6 +362,17 @@ export default function Dashboard() {
     0
   );
 
+  // Daily profit - bets settled today
+  const today = startOfDay(new Date());
+  const todaySettledBets = settledBets.filter((bet) => {
+    const settledDate = bet.settledAt ? new Date(bet.settledAt) : new Date(bet.createdAt);
+    return isSameDay(startOfDay(settledDate), today);
+  });
+  const dailyPL = todaySettledBets.reduce(
+    (sum, bet) => sum + (bet.profit ? parseFloat(bet.profit) : 0),
+    0
+  );
+
   const handleFetchCLV = (betId: string) => {
     setFetchingCLV(prev => new Set(prev).add(betId));
     fetchCLVMutation.mutate(betId, {
@@ -545,7 +556,13 @@ export default function Dashboard() {
       <main className="px-3 sm:px-4 py-4 sm:py-6 max-w-7xl mx-auto">
         <div className="space-y-6">
           {/* Metrics Grid - Scrollable on mobile */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2 sm:gap-3">
+            <MetricCard
+              label="Today's P/L"
+              value={`${dailyPL >= 0 ? "$" : "-$"}${Math.abs(dailyPL).toFixed(2)}`}
+              trend={todaySettledBets.length > 0 ? { value: `${todaySettledBets.length} bet${todaySettledBets.length !== 1 ? 's' : ''}`, positive: dailyPL >= 0 } : undefined}
+              icon={<CalendarDays className="h-4 w-4" />}
+            />
             <MetricCard
               label="Total P/L"
               value={`${totalPL >= 0 ? "$" : "-$"}${Math.abs(totalPL).toFixed(2)}`}

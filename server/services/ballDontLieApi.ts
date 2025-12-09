@@ -484,8 +484,15 @@ export function isGameCompleted(game: BallDontLieGame): boolean {
 export function getGameStatusMessage(game: BallDontLieGame): string {
   if (game.status === 'Final') return 'Final';
   if (game.period_detail) return game.period_detail;
-  if (game.period && game.time) return `Q${game.period} ${game.time}`;
-  if (game.period) return `Quarter ${game.period}`;
+  if (game.period && game.time) {
+    // Check if time already includes quarter info (e.g., "Q3 3:42")
+    if (game.time.match(/^Q\d/i) || game.time.match(/^\d+:\d+$/)) {
+      // If time is just "3:42", add quarter prefix
+      return game.time.match(/^\d+:\d+$/) ? `Q${game.period} ${game.time}` : game.time;
+    }
+    return `Q${game.period} ${game.time}`;
+  }
+  if (game.period) return `Q${game.period}`;
   return game.status || 'Scheduled';
 }
 

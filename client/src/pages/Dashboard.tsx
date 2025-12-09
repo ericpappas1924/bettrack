@@ -69,31 +69,12 @@ export default function Dashboard() {
   }, [bets]);
 
   // Fetch live stats for ALL active bets that are currently live or completed
+  // Always enabled - fetches in parallel with bets, backend handles empty case
   const { data: liveStats = [], refetch: refetchLiveStats, isLoading: isLoadingLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
     refetchInterval,
     staleTime: 0, // Always fetch fresh on page load - don't use cached data
-    enabled: (() => {
-      // Enable for both LIVE and COMPLETED games (to show final stats)
-      const trackableBets = bets.filter((bet) => {
-        if (bet.status !== "active" || !bet.gameStartTime) return false;
-        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-        return gameStatus === 'live' || gameStatus === 'completed';
-      });
-      
-      const liveBets = bets.filter((bet) => {
-        if (bet.status !== "active" || !bet.gameStartTime) return false;
-        const gameStatus = getGameStatus(bet.gameStartTime, bet.sport as Sport);
-        return gameStatus === 'live';
-      });
-      
-      if (trackableBets.length > 0) {
-        console.log(`🔴 [DASHBOARD] Live tracking enabled for ${trackableBets.length} bet(s) (${liveBets.length} live, ${trackableBets.length - liveBets.length} completed)`);
-        console.log(`   Trackable bet IDs:`, trackableBets.map(b => b.id.substring(0, 8)));
-      }
-      
-      return trackableBets.length > 0;
-    })(),
+    refetchOnMount: 'always', // Always refetch when component mounts
   });
 
   // Check if there are any active parlays/round robins
@@ -103,13 +84,13 @@ export default function Dashboard() {
     return betType.includes('parlay') || betType.includes('teaser') || betType.includes('round robin');
   });
 
-  // Fetch parlay live stats (for active parlays) - uses its own polling condition
+  // Fetch parlay live stats (for active parlays)
+  // Always enabled - fetches in parallel with bets, backend handles empty case
   const { data: parlayLiveStats = [] } = useQuery<ParlayLiveStats[]>({
     queryKey: ["/api/bets/parlay-live-stats"],
-    // Always poll every 60 seconds if there are active parlays (independent of gameStartTime)
     refetchInterval: hasActiveParlays ? 60000 : false,
     staleTime: 0, // Always fetch fresh on page load
-    enabled: hasActiveParlays,
+    refetchOnMount: 'always', // Always refetch when component mounts
   });
 
   // Helper to get parlay stats for a specific bet

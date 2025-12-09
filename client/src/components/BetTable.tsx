@@ -173,6 +173,9 @@ export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClic
                           <Badge variant="secondary" className="text-xs">
                             LIVE
                           </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {liveStat.gameStatus || ''}
+                          </span>
                           {liveStat.betType === 'Player Prop' && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined && (
                             <span className="text-xs font-medium tabular-nums">
                               {Number.isInteger(liveStat.currentValue) 
@@ -293,11 +296,19 @@ export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClic
                                       />
                                     </div>
                                   )}
+                                  {liveStat.gameStatus && (
+                                    <p className="text-xs text-muted-foreground">{liveStat.gameStatus}</p>
+                                  )}
                                 </>
                               ) : (
-                                liveStat.currentScore && (
-                                  <p className="text-xs font-medium">{liveStat.currentScore}</p>
-                                )
+                                <>
+                                  {liveStat.currentScore && (
+                                    <p className="text-xs font-medium">{liveStat.currentScore}</p>
+                                  )}
+                                  {liveStat.gameStatus && (
+                                    <p className="text-xs text-muted-foreground">{liveStat.gameStatus}</p>
+                                  )}
+                                </>
                               )}
                             </div>
                           ) : (

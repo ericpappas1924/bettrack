@@ -12,6 +12,7 @@ export const SPORTS = {
   WNCAAB: 'WNCAAB', // Women's NCAA Basketball
   WNBA: 'WNBA',
   MLS: 'MLS',
+  SOC: 'SOC', // Soccer (general)
   
   // Esports
   CS2: 'CS2',
@@ -135,6 +136,7 @@ export function getSportFromText(text: string): Sport {
   if (upper.includes('[CBB]') || upper.includes('[NCAAB]') || upper === 'CBB' || upper === 'NCAAB') return SPORTS.NCAAB;
   if (upper.includes('[WNBA]') || upper === 'WNBA') return SPORTS.WNBA;
   if (upper.includes('[MLS]') || upper === 'MLS') return SPORTS.MLS;
+  if (upper.includes('[SOC]') || upper === 'SOC' || upper.includes('SOCCER')) return SPORTS.SOC;
   
   // UFC/MMA detection
   if (upper.includes('[MU]') || upper.includes('[UFC]') || upper === 'MU' || upper === 'UFC' || upper === 'MMA') return 'UFC';
@@ -436,6 +438,7 @@ export const SPORT_DURATIONS: Record<Sport, number> = {
   [SPORTS.MLB]: 3.0,        // Baseball averages ~3 hours
   [SPORTS.NHL]: 2.5,        // Hockey ~2.5 hours
   [SPORTS.MLS]: 2.0,        // Soccer ~2 hours (90 min + halftime + stoppage)
+  [SPORTS.SOC]: 2.0,        // Soccer ~2 hours (90 min + halftime + stoppage)
   [SPORTS.CS2]: 2.0,        // CS2 matches typically 1-2 hours
   [SPORTS.DOTA2]: 2.5,      // DOTA2 can be longer
   [SPORTS.LOL]: 2.0,        // League of Legends ~1-2 hours

@@ -398,24 +398,53 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
     
     // Try RBL/DST Parlay format: [RBL] - DST Parlay|ID:...
     // Then: Game matchup on next line
-    // Then: To Win: TEAM (TEAM1 @ TEAM2)
+    // Then: To Win: TEAM (TEAM1 @ TEAM2) OR Total Goals: Over/Under (X.X) (TEAM1 @ TEAM2) OR Double Chance: ...
     const rblParlayMatch = line.match(/\[RBL\]\s*-\s*DST\s+Parlay/i);
     if (rblParlayMatch && i + 2 < lines.length) {
       const gameMatchup = lines[i + 1]?.trim();
-      const toWinLine = lines[i + 2]?.trim();
+      const betLine = lines[i + 2]?.trim();
       
-      if (gameMatchup && toWinLine && toWinLine.includes('To Win:')) {
-        // Extract team name from "To Win: TEAM (TEAM1 @ TEAM2)"
-        const toWinMatch = toWinLine.match(/To Win:\s*([^(]+)\s*\(([^)]+)\)/);
+      if (gameMatchup && betLine) {
+        // Detect sport from game matchup, default to SOC for RBL parlays
+        let detectedSport = getSportFromText(gameMatchup);
+        if (detectedSport === 'Other') {
+          detectedSport = 'SOC'; // Most RBL parlays are soccer
+        }
+        
+        // Pattern 1: To Win: TEAM (TEAM1 @ TEAM2)
+        const toWinMatch = betLine.match(/To Win:\s*([^(]+)\s*\(([^)]+)\)/);
         if (toWinMatch) {
           const team = toWinMatch[1].trim();
           const matchup = toWinMatch[2].trim();
-          // Detect sport from game matchup
-          const detectedSport = getSportFromText(gameMatchup);
           const legText = `[${detectedSport}] ${gameMatchup} - ${team} to Win [Pending]`;
           legs.push(legText);
           console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg: ${legText}`);
-          i += 3; // Skip header, game, and To Win line
+          i += 3; // Skip header, game, and bet line
+          continue;
+        }
+        
+        // Pattern 2: Total Goals: Over/Under (X.X) (TEAM1 @ TEAM2)
+        const totalGoalsMatch = betLine.match(/Total Goals:\s*(Over|Under)\s*\(([^)]+)\)\s*\(([^)]+)\)/i);
+        if (totalGoalsMatch) {
+          const overUnder = totalGoalsMatch[1];
+          const line = totalGoalsMatch[2];
+          const matchup = totalGoalsMatch[3].trim();
+          const legText = `[${detectedSport}] ${gameMatchup} - Total Goals ${overUnder} ${line} [Pending]`;
+          legs.push(legText);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg: ${legText}`);
+          i += 3; // Skip header, game, and bet line
+          continue;
+        }
+        
+        // Pattern 3: Double Chance: DRAW/TEAM (TEAM1 @ TEAM2)
+        const doubleChanceMatch = betLine.match(/Double Chance:\s*([^(]+)\s*\(([^)]+)\)/i);
+        if (doubleChanceMatch) {
+          const selection = doubleChanceMatch[1].trim();
+          const matchup = doubleChanceMatch[2].trim();
+          const legText = `[${detectedSport}] ${gameMatchup} - Double Chance ${selection} [Pending]`;
+          legs.push(legText);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg: ${legText}`);
+          i += 3; // Skip header, game, and bet line
           continue;
         }
       }
@@ -602,22 +631,33 @@ export function parseBetPaste(rawText: string): ParseResult {
           calculatedOdds = liveDetails.odds;
         }
       } else if (betType === 'Player Prop Parlay') {
-        // Player prop parlay - extract multiple props from same or different games
-        const propDetails = extractPlayerPropDetails(block);
-        game = propDetails.game;
-        
-        // Extract individual props as legs
-        const propLines = block.split('\n')
-          .filter(l => l.match(/Over|Under/i) && !l.includes(' vs '))
-          .map(l => l.trim());
-        
-        legs = propLines.length > 0 ? propLines : undefined;
-        description = `${legs?.length || 0}-Prop Parlay`;
-        
-        // Re-detect sport
-        sport = game ? getSportFromText(game) : getSportFromText(block);
-        if (sport === 'Other') {
-          sport = getSportFromText(block);
+        // Check if this is an RBL/DST Parlay format (soccer totals)
+        if (block.includes('[RBL]') || block.includes('DST Parlay')) {
+          const parlayDetails = extractParlayDetails(block);
+          legs = parlayDetails.legs;
+          description = `${legs?.length || 0}-Prop Parlay`;
+          game = parlayDetails.legs && parlayDetails.legs.length > 0 
+            ? parlayDetails.legs[0].split(' - ')[0].replace(/^\[[^\]]+\]\s*/, '') 
+            : 'Unknown';
+          sport = 'SOC'; // RBL parlays are soccer
+        } else {
+          // Player prop parlay - extract multiple props from same or different games
+          const propDetails = extractPlayerPropDetails(block);
+          game = propDetails.game;
+          
+          // Extract individual props as legs
+          const propLines = block.split('\n')
+            .filter(l => l.match(/Over|Under/i) && !l.includes(' vs '))
+            .map(l => l.trim());
+          
+          legs = propLines.length > 0 ? propLines : undefined;
+          description = `${legs?.length || 0}-Prop Parlay`;
+          
+          // Re-detect sport
+          sport = game ? getSportFromText(game) : getSportFromText(block);
+          if (sport === 'Other') {
+            sport = getSportFromText(block);
+          }
         }
       } else if (betType === 'Player Prop') {
         const propDetails = extractPlayerPropDetails(block);
@@ -688,6 +728,28 @@ export function parseBetPaste(rawText: string): ParseResult {
         gameStartTime = parlayDetails.gameStartTime;
         if (gameStartTime) {
           console.log(`  ✓ Extracted game time from ${betType.toLowerCase()}: ${gameStartTime}`);
+        }
+        
+        // For RBL/DST parlays, try to detect sport from legs
+        if (block.includes('[RBL]') || block.includes('DST Parlay')) {
+          // Check if any leg has a detected sport
+          const legSports = legs?.map(leg => {
+            const sportMatch = leg.match(/^\[([^\]]+)\]/);
+            return sportMatch ? sportMatch[1] : null;
+          }).filter(s => s && s !== 'Other');
+          
+          // If all legs are the same sport, use that
+          if (legSports && legSports.length > 0) {
+            const firstSport = legSports[0];
+            if (legSports.every(s => s === firstSport)) {
+              sport = firstSport as Sport;
+            }
+          }
+          
+          // If still Other and RBL/DST format, default to SOC (most RBL parlays are soccer)
+          if (sport === 'Other') {
+            sport = 'SOC';
+          }
         }
       } else {
         const straightDetails = extractStraightBetDetails(block);
@@ -916,24 +978,16 @@ function extractTeamFromBet(parsed: ParsedBet): string {
       return team || parsed.description;
     }
     
-    // Match spread pattern: team name + spread (1-2 digits, optionally with .5/½) + odds
-    // Valid spreads: +4.5, -7, +10½, -3, +14.5, -2½, -1½
-    // Spreads are typically followed by odds like -110, -120
-    // Pattern: TEAM +4½-120, TEAM -7-110, TEAM +3.5-105
-    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-]\d{1,2}[½¼]?)(?:-\d{2,3})?\s*(\(B\+[^)]+\))?/);
+    // Match spread pattern: team name + spread (must have fraction/decimal) + odds
+    // Valid spreads: +½, -3.5, +4½, -7.5, +10.5
+    // Must contain ½, ¼, or decimal point to distinguish from odds
+    // Pattern: TEAM +4½-120, TEAM -7.5-110, TEAM +3½-105
+    const spreadMatch = parsed.description.match(/^(.+?)\s*([+-](?:\d{1,2})?[½¼\.]\d?)([+-]\d{3,})?\s*(\(B\+[^)]+\))?/);
     if (spreadMatch) {
       const team = spreadMatch[1].trim();
       const spreadRaw = spreadMatch[2];
-      
-      // Validate: if spread looks like it could be odds (e.g., starts at 100+), skip
-      const spreadNum = parseFloat(spreadRaw.replace('½', '.5').replace('¼', '.25'));
-      if (Math.abs(spreadNum) >= 100) {
-        // This is actually odds, not a spread - return just team
-        return team || parsed.description;
-      }
-      
       const spread = spreadRaw.replace('½', '.5').replace('¼', '.25');
-      const boughtPoint = spreadMatch[3] || ''; // (B+½), (B+1), etc.
+      const boughtPoint = spreadMatch[4] || ''; // (B+½), (B+1), etc.
       
       // Format bought point indicator more readably: (B+½) -> (Bought +0.5)
       let boughtPointDisplay = '';
@@ -953,9 +1007,10 @@ function extractTeamFromBet(parsed: ParsedBet): string {
     }
     
     // Match total pattern: Over/Under + number + odds
-    const totalMatch = parsed.description.match(/^(Over|Under)\s*([\d]+(?:[\.½¼][05]?)?)(?:\s*[+-]\d|$)/i);
+    // Also handle shorthand: o/u prefix (e.g., "TOTAL u4½-115")
+    const totalMatch = parsed.description.match(/^(?:TOTAL\s+)?([oOuU]|Over|Under)\s*([\d]+(?:[\.½¼][05]?)?)(?:\s*[+-]\d|$)/i);
     if (totalMatch) {
-      const direction = totalMatch[1];
+      const direction = totalMatch[1].toLowerCase() === 'o' || totalMatch[1].toLowerCase() === 'over' ? 'Over' : 'Under';
       const line = totalMatch[2].replace('½', '.5').replace('¼', '.25');
       return `${direction} ${line}`;
     }

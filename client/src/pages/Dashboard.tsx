@@ -55,6 +55,7 @@ export default function Dashboard() {
 
   const { data: bets = [], isLoading } = useQuery<Bet[]>({
     queryKey: ["/api/bets"],
+    staleTime: 5000, // Consider fresh for 5 seconds, then refetch
   });
 
   // Compute refetch interval: only refetch if there are live bets
@@ -71,6 +72,7 @@ export default function Dashboard() {
   const { data: liveStats = [], refetch: refetchLiveStats, isLoading: isLoadingLiveStats } = useQuery<LiveStat[]>({
     queryKey: ["/api/bets/live-stats"],
     refetchInterval,
+    staleTime: 0, // Always fetch fresh on page load - don't use cached data
     enabled: (() => {
       // Enable for both LIVE and COMPLETED games (to show final stats)
       const trackableBets = bets.filter((bet) => {
@@ -106,6 +108,7 @@ export default function Dashboard() {
     queryKey: ["/api/bets/parlay-live-stats"],
     // Always poll every 60 seconds if there are active parlays (independent of gameStartTime)
     refetchInterval: hasActiveParlays ? 60000 : false,
+    staleTime: 0, // Always fetch fresh on page load
     enabled: hasActiveParlays,
   });
 

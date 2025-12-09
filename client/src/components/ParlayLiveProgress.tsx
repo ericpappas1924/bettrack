@@ -31,6 +31,7 @@ export interface ParlayLegLiveStat {
   currentValue?: number;
   targetValue?: number;
   progress?: number;
+  isOver?: boolean;
 }
 
 export interface ParlayLiveStats {
@@ -41,6 +42,27 @@ export interface ParlayLiveStats {
 interface ParlayLiveProgressProps {
   parlayStats?: ParlayLiveStats | null;
   compact?: boolean;
+}
+
+/**
+ * Get progress bar color based on bet type, progress, and completion status
+ * OVER bets: Amber when under target, Green when hit
+ * UNDER bets: Green (safe < 60%), Amber (risky 60-85%), Red (danger >= 85%)
+ */
+function getProgressBarColor(progress: number, isOver: boolean | undefined, isComplete: boolean, isWinning: boolean): string {
+  if (isComplete) {
+    return isWinning ? 'bg-green-500' : 'bg-red-500';
+  }
+  
+  if (isOver === false) {
+    // UNDER bet: color based on danger level (progress toward line)
+    if (progress >= 85) return 'bg-red-500';
+    if (progress >= 60) return 'bg-amber-500';
+    return 'bg-green-500';
+  }
+  
+  // OVER bet: amber until hit, green when hit
+  return isWinning ? 'bg-green-500' : 'bg-amber-500';
 }
 
 function getStatusIcon(status: ParlayLegLiveStat['status'], isLive: boolean) {
@@ -197,7 +219,7 @@ export function ParlayLiveProgress({ parlayStats, compact = false }: ParlayLiveP
                   </div>
                   <Progress 
                     value={leg.progress || 0} 
-                    className={`h-1.5 ${leg.isWinning ? '[&>div]:bg-green-500' : '[&>div]:bg-amber-500'}`}
+                    className={`h-1.5 [&>div]:${getProgressBarColor(leg.progress || 0, leg.isOver, leg.isComplete, leg.isWinning)}`}
                   />
                   {leg.gameStatus && (
                     <span className="text-xs text-muted-foreground">

@@ -72,6 +72,27 @@ function parseTimeRemaining(gameStatus: string, sport: string): string {
   return gameStatus;
 }
 
+/**
+ * Get progress bar color based on bet type, progress, and completion status
+ * OVER bets: Amber when under target, Green when hit
+ * UNDER bets: Green (safe < 60%), Amber (risky 60-85%), Red (danger >= 85%)
+ */
+function getProgressBarColor(progress: number, isOver: boolean | undefined, isComplete: boolean, isWinning: boolean): string {
+  if (isComplete) {
+    return isWinning ? 'bg-green-500' : 'bg-red-500';
+  }
+  
+  if (isOver === false) {
+    // UNDER bet: color based on danger level (progress toward line)
+    if (progress >= 85) return 'bg-red-500';
+    if (progress >= 60) return 'bg-amber-500';
+    return 'bg-green-500';
+  }
+  
+  // OVER bet: amber until hit, green when hit
+  return isWinning ? 'bg-green-500' : 'bg-amber-500';
+}
+
 export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProps) {
   if (!liveStat) {
     return null;
@@ -138,7 +159,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
               </div>
               <div className="w-full bg-secondary rounded-full h-1.5 mt-1">
                 <div 
-                  className={`h-1.5 rounded-full transition-all ${isHitting ? 'bg-green-500' : 'bg-amber-500'}`}
+                  className={`h-1.5 rounded-full transition-all ${getProgressBarColor(progress, isOver, isComplete, isHitting)}`}
                   style={{ width: `${Math.min(100, progress || 0)}%` }}
                 />
               </div>
@@ -243,11 +264,7 @@ export function LiveStatsBadge({ liveStat, compact = false }: LiveStatsBadgeProp
             {(isLive || isComplete) && progress !== undefined && (
               <div className="w-full bg-secondary rounded-full h-2">
                 <div 
-                  className={`h-2 rounded-full transition-all ${
-                    isComplete 
-                      ? (isHitting ? 'bg-green-500' : 'bg-red-500')
-                      : (isHitting ? 'bg-green-500' : 'bg-amber-500')
-                  }`}
+                  className={`h-2 rounded-full transition-all ${getProgressBarColor(progress, isOver, isComplete, isHitting)}`}
                   style={{ width: `${Math.min(100, progress)}%` }}
                 />
               </div>

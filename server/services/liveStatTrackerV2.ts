@@ -356,12 +356,10 @@ async function trackNBABet(
           ? currentValue >= targetValue 
           : currentValue <= targetValue;
         
-        let progress = 0;
-        if (isOver) {
-          progress = Math.min(100, (currentValue / targetValue) * 100);
-        } else {
-          progress = currentValue <= targetValue ? 100 : 0;
-        }
+        // Progress toward the line (works for both over and under)
+        // For OVER: progress fills as you approach target (good)
+        // For UNDER: progress fills as you approach danger (shows risk level)
+        const progress = Math.min(100, (currentValue / targetValue) * 100);
         
         console.log(`   💰 ${betDetails.playerName} ${isOver ? 'Over' : 'Under'} ${targetValue}: Current ${currentValue}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
         
@@ -589,12 +587,10 @@ async function trackNCAABBet(
           ? currentValue >= targetValue 
           : currentValue <= targetValue;
         
-        let progress = 0;
-        if (isOver) {
-          progress = Math.min(100, (currentValue / targetValue) * 100);
-        } else {
-          progress = currentValue <= targetValue ? 100 : 0;
-        }
+        // Progress toward the line (works for both over and under)
+        // For OVER: progress fills as you approach target (good)
+        // For UNDER: progress fills as you approach danger (shows risk level)
+        const progress = Math.min(100, (currentValue / targetValue) * 100);
         
         console.log(`   💰 ${betDetails.playerName} ${isOver ? 'Over' : 'Under'} ${targetValue}: Current ${currentValue}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
         
@@ -828,12 +824,10 @@ async function trackNFLBet(
           ? currentValue >= targetValue 
           : currentValue <= targetValue;
         
-        let progress = 0;
-        if (isOver) {
-          progress = Math.min(100, (currentValue / targetValue) * 100);
-        } else {
-          progress = currentValue <= targetValue ? 100 : 0;
-        }
+        // Progress toward the line (works for both over and under)
+        // For OVER: progress fills as you approach target (good)
+        // For UNDER: progress fills as you approach danger (shows risk level)
+        const progress = Math.min(100, (currentValue / targetValue) * 100);
         
         console.log(`\n💰 [NFL-TRACKER] Step 4: Bet Status Calculation`);
         console.log(`   Player: ${betDetails.playerName}`);
@@ -1265,12 +1259,10 @@ export async function trackBetLiveStats(bet: any): Promise<LiveStatProgress | nu
           ? currentValue >= targetValue 
           : currentValue <= targetValue;
         
-        let progress = 0;
-        if (isOver) {
-          progress = Math.min(100, (currentValue / targetValue) * 100);
-        } else {
-          progress = currentValue <= targetValue ? 100 : 0;
-        }
+        // Progress toward the line (works for both over and under)
+        // For OVER: progress fills as you approach target (good)
+        // For UNDER: progress fills as you approach danger (shows risk level)
+        const progress = Math.min(100, (currentValue / targetValue) * 100);
         
         console.log(`   💰 ${betDetails.playerName} ${isOver ? 'Over' : 'Under'} ${targetValue}: Current ${currentValue}, ${isWinning ? 'HITTING' : 'NOT HITTING'}`);
         

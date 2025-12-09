@@ -395,6 +395,7 @@ export interface ParlayLegLiveStat {
   currentValue?: number;
   targetValue?: number;
   progress?: number;
+  isOver?: boolean;
   
   // For totals
   totalScore?: number;
@@ -551,6 +552,7 @@ export async function getParlayLegLiveStats(bet: any): Promise<ParlayLegLiveStat
         baseStat.currentValue = result.currentValue;
         baseStat.targetValue = result.targetValue;
         baseStat.progress = result.progress;
+        baseStat.isOver = result.isOver;
       }
       
       if (result.isComplete) {

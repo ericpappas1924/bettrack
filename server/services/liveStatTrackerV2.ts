@@ -63,11 +63,32 @@ function parseBetDetails(bet: any): {
   console.log(`\n🔍 [PARSE] Starting parseBetDetails`);
   console.log(`   Input description: "${description}"`);
   console.log(`   Input betType: "${betType}"`);
+  console.log(`   Database fields:`, {
+    player: bet.player,
+    overUnder: bet.overUnder,
+    line: bet.line,
+    market: bet.market
+  });
   
-  // Player Prop parsing - Check BOTH betType AND description pattern
-  // This handles cases where betType might be wrong in database
-  const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i;
+  // Player Prop parsing - PRIORITIZE structured database fields
   const isPlayerPropByType = betType === 'Player Prop' || betType.toLowerCase().includes('prop');
+  
+  // If we have structured fields in the database, use them directly (most reliable)
+  if (isPlayerPropByType && bet.player && bet.overUnder && bet.line && bet.market) {
+    console.log(`   ✅ Using structured database fields for Player Prop`);
+    const parsed = {
+      betType: 'Player Prop',
+      playerName: bet.player,
+      isOver: bet.overUnder.toLowerCase() === 'over',
+      targetValue: parseFloat(bet.line),
+      statType: bet.market.toLowerCase(),
+    };
+    console.log(`   ✅ Parsed result (from DB):`, parsed);
+    return parsed;
+  }
+  
+  // Fallback: Parse from description pattern
+  const overUnderPattern = /([A-Za-z\s'\.]+?)\s*(?:\([A-Z]+\))?\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+)/i;
   const isPlayerPropByPattern = description.match(overUnderPattern);
   
   console.log(`   Bet type check: ${isPlayerPropByType ? '✅ Player Prop' : '❌ Not Player Prop'}`);
@@ -97,7 +118,7 @@ function parseBetDetails(bet: any): {
         statType: match[4].trim().toLowerCase(),
       };
       
-      console.log(`   ✅ Parsed result:`, parsed);
+      console.log(`   ✅ Parsed result (from regex):`, parsed);
       return parsed;
     } else {
       console.error(`   ❌ Regex NO MATCH for Player Prop`);

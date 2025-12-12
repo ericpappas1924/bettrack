@@ -198,6 +198,7 @@ export default function SocialDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/potd/bets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/potd/categories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/potd/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/social/leaderboard"] });
       toast({ title: "POTD Settled!", description: "The bet and category stats have been updated" });
       setSettleDialogOpen(false);
       setBetToSettle(null);
@@ -221,6 +222,7 @@ export default function SocialDashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/potd/bets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/potd/categories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/potd/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/social/leaderboard"] });
       toast({ title: "Removed from POTD", description: "The bet has been removed from Plays of the Day" });
     },
     onError: (error: Error) => {

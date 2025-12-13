@@ -1368,7 +1368,7 @@ export async function trackMultipleBets(bets: any[]): Promise<any[]> {
     ...r,
     status: r.isComplete ? (r.isWinning ? 'winning' : 'losing') : 'pending',
     currentScore: `${r.awayTeam} ${r.awayScore}, ${r.homeTeam} ${r.homeScore}`,
-    progress: r.progress || 100,
+    progress: r.progress !== undefined && r.progress !== null ? r.progress : 100,
   }));
 }
 

@@ -192,6 +192,40 @@ export async function registerRoutes(
     try {
       const userId = req.user.claims.sub;
       const validatedData = insertBetSchema.parse({ ...req.body, userId });
+      
+      // Check for duplicates (same odds and stake)
+      const existingBets = await storage.getAllBets(userId);
+      const isDuplicate = existingBets.some((existingBet: any) => {
+        // Match on openingOdds and stake (as requested)
+        const sameOdds = existingBet.openingOdds === validatedData.openingOdds;
+        const sameStake = existingBet.stake === validatedData.stake;
+        
+        // Also match on team to ensure it's the same bet (not just coincidental same odds/stake)
+        const sameTeam = existingBet.team === validatedData.team;
+        
+        // For player props, also match on player, market, overUnder, and line
+        if (validatedData.player && existingBet.player) {
+          return sameOdds && sameStake && sameTeam &&
+                 existingBet.player === validatedData.player &&
+                 existingBet.market === validatedData.market &&
+                 existingBet.overUnder === validatedData.overUnder &&
+                 existingBet.line === validatedData.line;
+        }
+        
+        // For regular bets, match on team, game (if available), and betType
+        const sameGame = (!validatedData.game && !existingBet.game) || (validatedData.game === existingBet.game);
+        const sameBetType = existingBet.betType === validatedData.betType;
+        
+        return sameOdds && sameStake && sameTeam && sameGame && sameBetType;
+      });
+      
+      if (isDuplicate) {
+        return res.status(409).json({ 
+          error: "Duplicate bet",
+          message: "A bet with the same odds and stake already exists"
+        });
+      }
+      
       const bet = await storage.createBet(validatedData);
       res.status(201).json(bet);
     } catch (error) {
@@ -432,21 +466,82 @@ export async function registerRoutes(
         });
       }
       
-      console.log(`\n💾 Saving ${validBets.length} valid bets to database...`);
-      const createdBets = await storage.createBets(validBets);
+      // STEP 3: Check for duplicates (same odds and stake)
+      console.log(`\n🔍 Checking for duplicates...`);
+      const existingBets = await storage.getAllBets(userId);
+      const duplicateBets: any[] = [];
+      const uniqueBets: any[] = [];
+      
+      for (const bet of validBets) {
+        const isDuplicate = existingBets.some((existingBet: any) => {
+          // Match on openingOdds and stake (as requested)
+          const sameOdds = existingBet.openingOdds === bet.openingOdds;
+          const sameStake = existingBet.stake === bet.stake;
+          
+          // Also match on team to ensure it's the same bet (not just coincidental same odds/stake)
+          const sameTeam = existingBet.team === bet.team;
+          
+          // For player props, also match on player, market, overUnder, and line
+          if (bet.player && existingBet.player) {
+            return sameOdds && sameStake && sameTeam &&
+                   existingBet.player === bet.player &&
+                   existingBet.market === bet.market &&
+                   existingBet.overUnder === bet.overUnder &&
+                   existingBet.line === bet.line;
+          }
+          
+          // For regular bets, match on team, game (if available), and betType
+          const sameGame = (!bet.game && !existingBet.game) || (bet.game === existingBet.game);
+          const sameBetType = existingBet.betType === bet.betType;
+          
+          return sameOdds && sameStake && sameTeam && sameGame && sameBetType;
+        });
+        
+        if (isDuplicate) {
+          duplicateBets.push(bet);
+          console.log(`   ⚠️  Duplicate found: ${bet.team} ${bet.openingOdds} $${bet.stake}`);
+        } else {
+          uniqueBets.push(bet);
+        }
+      }
+      
+      console.log(`\n📊 DUPLICATE CHECK SUMMARY:`);
+      console.log(`   Unique: ${uniqueBets.length} bets`);
+      console.log(`   Duplicates: ${duplicateBets.length} bets (skipped)`);
+      
+      if (uniqueBets.length === 0) {
+        return res.status(400).json({ 
+          error: "All bets are duplicates",
+          duplicates: duplicateBets.length,
+          message: `All ${validBets.length} bets are duplicates and were skipped`
+        });
+      }
+      
+      console.log(`\n💾 Saving ${uniqueBets.length} unique bets to database...`);
+      const createdBets = await storage.createBets(uniqueBets);
       
       console.log(`\n✅ Successfully imported ${createdBets.length} bets`);
       if (failedBets.length > 0) {
         console.log(`⚠️  ${failedBets.length} bets failed and were skipped`);
       }
+      if (duplicateBets.length > 0) {
+        console.log(`⚠️  ${duplicateBets.length} duplicate bets were skipped`);
+      }
       console.log(`========== IMPORT COMPLETE ==========\n`);
       
-      // Return successes, failures, and enrichment stats
+      // Return successes, failures, duplicates, and enrichment stats
       res.status(201).json({
         imported: createdBets,
         failed: failedBets.length > 0 ? failedBets.map(f => ({ 
           game: f.bet.game || f.bet.team, 
           error: f.error 
+        })) : undefined,
+        duplicates: duplicateBets.length > 0 ? duplicateBets.map(d => ({
+          team: d.team,
+          game: d.game,
+          openingOdds: d.openingOdds,
+          stake: d.stake,
+          player: d.player
         })) : undefined,
         enrichment: {
           matchups: enrichedMatchups,

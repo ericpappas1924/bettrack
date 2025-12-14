@@ -98,6 +98,11 @@ export default function Dashboard() {
     return parlayLiveStats.find(p => p.betId === betId) || null;
   };
 
+  // Helper to get live stats for a specific bet
+  const getLiveStatForBet = (betId: string): LiveStat | null => {
+    return liveStats.find(s => s.betId === betId) || null;
+  };
+
   // Debug logging for live stats
   useEffect(() => {
     if (liveStats.length > 0) {
@@ -764,6 +769,7 @@ export default function Dashboard() {
         onSettle={handleSettleBet}
         onDelete={handleDeleteBet}
         parlayLiveStats={detailBet ? getParlayLiveStatsForBet(detailBet.id) : null}
+        liveStat={detailBet ? getLiveStatForBet(detailBet.id) : null}
       />
     </div>
   );

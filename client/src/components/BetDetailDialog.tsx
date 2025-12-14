@@ -83,9 +83,10 @@ interface BetDetailDialogProps {
   onSettle?: (result: "won" | "lost" | "push") => void;
   onDelete?: (betId: string) => void;
   parlayLiveStats?: ParlayLiveStats | null;
+  liveStat?: LiveStat | null;
 }
 
-export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle, onDelete, parlayLiveStats }: BetDetailDialogProps) {
+export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onSettle, onDelete, parlayLiveStats, liveStat }: BetDetailDialogProps) {
   const { toast } = useToast();
   const [editingLiveOdds, setEditingLiveOdds] = useState(false);
   const [liveOddsInput, setLiveOddsInput] = useState("");
@@ -399,6 +400,22 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
                 </div>
 
                 <Separator className="my-4" />
+
+                {/* Live Bet Progress Section */}
+                {(liveStat || (parlayLiveStats && parlayLiveStats.legs.length > 0)) && (
+                  <>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Live Bet Progress</p>
+                      {liveStat && (
+                        <LiveStatsBadge liveStat={liveStat} compact={false} />
+                      )}
+                      {parlayLiveStats && parlayLiveStats.legs.length > 0 && (
+                        <ParlayLiveProgress parlayStats={parlayLiveStats} />
+                      )}
+                    </div>
+                    <Separator className="my-4" />
+                  </>
+                )}
 
                 <div className="flex items-center justify-between gap-4">
                   <div>

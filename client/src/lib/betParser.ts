@@ -205,7 +205,7 @@ function extractStraightBetDetails(block: string): { game: string; description: 
       game = `${team1} vs ${team2}`;
     } else {
       // Regular straight bet - extract team name
-      const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
+    const teamMatch = betDetails.match(/^([A-Z\s]+?)(?=\s*[+-]|\s*$)/);
       game = teamMatch ? teamMatch[1].trim() : betDetails;
     }
     
@@ -263,8 +263,8 @@ function extractPlayerPropDetails(block: string): {
       
       // If it has Over/Under or stat types, it's likely a prop line, not the game
       if (!hasOverUnder && !hasStatType) {
-        game = line;
-        break;
+      game = line;
+      break;
       }
     }
   }
@@ -310,22 +310,22 @@ function extractPlayerPropDetails(block: string): {
   
   // Fallback to regex patterns if the simple approach didn't work
   if (!description) {
-    const propPatterns = [
-      /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
-      /([A-Za-z\s'\.]+)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
-      /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*([\d\.]+\+)\s+([A-Za-z\s]+?)(?=\n|Pending|$)/i,
-    ];
-    
-    for (const pattern of propPatterns) {
-      const match = block.match(pattern);
-      if (match) {
-        if (match[4]) {
-          description = `${match[1].trim()} ${match[2]} ${match[3]} ${match[4].trim()}`;
-        } else if (match[3]) {
-          description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
-        }
-        description = description.replace(/\n/g, ' ').replace(/\s+/g, ' ');
-        break;
+  const propPatterns = [
+    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+    /([A-Za-z\s'\.]+)\s*(Over|Under)\s*([\d\.]+)\s+([A-Za-z\s\+]+?)(?=\n|Pending|$)/i,
+    /([A-Za-z\s'\.]+)\s*\([A-Z]+\)\s*([\d\.]+\+)\s+([A-Za-z\s]+?)(?=\n|Pending|$)/i,
+  ];
+  
+  for (const pattern of propPatterns) {
+    const match = block.match(pattern);
+    if (match) {
+      if (match[4]) {
+        description = `${match[1].trim()} ${match[2]} ${match[3]} ${match[4].trim()}`;
+      } else if (match[3]) {
+        description = `${match[1].trim()} ${match[2]} ${match[3].trim()}`;
+      }
+      description = description.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+      break;
       }
     }
   }
@@ -340,7 +340,7 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
   const gameTimes: Date[] = [];
   
   // Split block into lines for processing
-  const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   
   console.log(`🔍 [PARSER] Extracting parlay legs from ${lines.length} lines`);
   
@@ -405,10 +405,12 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
       const betLine = lines[i + 2]?.trim();
       
       if (gameMatchup && betLine) {
-        // Detect sport from game matchup, default to SOC for RBL parlays
+        // Detect sport from game matchup
         let detectedSport = getSportFromText(gameMatchup);
-        if (detectedSport === 'Other') {
-          detectedSport = 'SOC'; // Most RBL parlays are soccer
+        // Only default to SOC if we truly can't detect the sport AND it's not a player prop
+        // Player props in RBL parlays can be NFL, NBA, etc.
+        if (detectedSport === 'Other' && !betLine.match(/^[A-Za-z\s.']+\s*\([A-Z]+\)\s+\d+\+/)) {
+          detectedSport = 'SOC'; // Most RBL parlays are soccer (but not player props)
         }
         
         // Pattern 1: To Win: TEAM (TEAM1 @ TEAM2)
@@ -447,6 +449,40 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
           i += 3; // Skip header, game, and bet line
           continue;
         }
+        
+        // Pattern 4: Player Props: Player Name (Team) Number+ Stat Type
+        // Examples:
+        // - "Patrick Mahomes (KC) 219+ Passing Yards"
+        // - "Josh Allen (BUF) 206+ Passing Yards"
+        // - "Lamar Jackson (BAL) 1+ Passing Tds"
+        // - "Zay Flowers (BAL) 5+ Receptions"
+        // - "Kyle Monangai (CHI) 13+ Carries"
+        const playerPropMatch = betLine.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(\d+)\+\s+(.+)$/i);
+        if (playerPropMatch) {
+          const playerName = playerPropMatch[1].trim();
+          const teamAbbr = playerPropMatch[2].toUpperCase();
+          const targetValue = playerPropMatch[3];
+          const statType = playerPropMatch[4].trim();
+          
+          // Convert stat type to standard format
+          let normalizedStat = statType;
+          if (statType.match(/Passing\s+Yards?/i)) {
+            normalizedStat = 'Passing Yards';
+          } else if (statType.match(/Passing\s+Tds?/i)) {
+            normalizedStat = 'Passing TDs';
+          } else if (statType.match(/Receptions?/i)) {
+            normalizedStat = 'Receptions';
+          } else if (statType.match(/Carries?/i)) {
+            normalizedStat = 'Carries';
+          }
+          
+          // Format as "Over" bet (the + means over)
+          const legText = `[${detectedSport}] ${gameMatchup} - ${playerName} (${teamAbbr}) Over ${targetValue} ${normalizedStat} [Pending]`;
+          legs.push(legText);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg (player prop): ${legText}`);
+          i += 3; // Skip header, game, and bet line
+          continue;
+        }
       }
     }
     
@@ -482,20 +518,20 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
           console.log(`   ✅ [PARSER] Extracted UFC leg:`, legWithDate);
           
           // Parse game time
-          try {
-            const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
-            if (dateTimeMatch) {
-              const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
-              const months: { [key: string]: number } = {
-                'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-                'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-              };
-              let hour = parseInt(hours);
-              if (period === 'PM' && hour !== 12) hour += 12;
-              if (period === 'AM' && hour === 12) hour = 0;
-              gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
-            }
-          } catch (e) {
+    try {
+      const dateTimeMatch = gameDate.match(/(\w{3})-(\d{2})-(\d{4})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/);
+      if (dateTimeMatch) {
+        const [_, month, day, year, hours, minutes, period] = dateTimeMatch;
+        const months: { [key: string]: number } = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        let hour = parseInt(hours);
+        if (period === 'PM' && hour !== 12) hour += 12;
+        if (period === 'AM' && hour === 12) hour = 0;
+        gameTimes.push(new Date(parseInt(year), months[month], parseInt(day), hour, parseInt(minutes)));
+      }
+    } catch (e) {
             // Skip if parsing fails
           }
           
@@ -631,7 +667,7 @@ export function parseBetPaste(rawText: string): ParseResult {
           calculatedOdds = liveDetails.odds;
         }
       } else if (betType === 'Player Prop Parlay') {
-        // Check if this is an RBL/DST Parlay format (soccer totals)
+        // Check if this is an RBL/DST Parlay format (can be soccer, NFL, NBA, etc.)
         if (block.includes('[RBL]') || block.includes('DST Parlay')) {
           const parlayDetails = extractParlayDetails(block);
           legs = parlayDetails.legs;
@@ -639,7 +675,19 @@ export function parseBetPaste(rawText: string): ParseResult {
           game = parlayDetails.legs && parlayDetails.legs.length > 0 
             ? parlayDetails.legs[0].split(' - ')[0].replace(/^\[[^\]]+\]\s*/, '') 
             : 'Unknown';
-          sport = 'SOC'; // RBL parlays are soccer
+          // Detect sport from the first leg (which should have sport in brackets)
+          if (parlayDetails.legs && parlayDetails.legs.length > 0) {
+            const firstLeg = parlayDetails.legs[0];
+            const sportMatch = firstLeg.match(/^\[([^\]]+)\]/);
+            if (sportMatch) {
+              const detectedSport = getSportFromText(sportMatch[1]);
+              sport = detectedSport !== 'Other' ? detectedSport : getSportFromText(block);
+            } else {
+              sport = getSportFromText(block);
+            }
+          } else {
+            sport = getSportFromText(block);
+          }
         } else {
           // Player prop parlay - extract multiple props from same or different games
           const propDetails = extractPlayerPropDetails(block);
@@ -710,12 +758,12 @@ export function parseBetPaste(rawText: string): ParseResult {
             }
           }
         } else {
-          // Re-detect sport by checking the game matchup first, then the block
-          sport = game ? getSportFromText(game) : getSportFromText(block);
-          // If still OTHER, try the whole block
-          if (sport === 'Other') {
-            sport = getSportFromText(block);
-          }
+        // Re-detect sport by checking the game matchup first, then the block
+        sport = game ? getSportFromText(game) : getSportFromText(block);
+        // If still OTHER, try the whole block
+        if (sport === 'Other') {
+          sport = getSportFromText(block);
+        }
         }
       } else if (betType === 'Parlay' || betType === 'Teaser') {
         const parlayDetails = extractParlayDetails(block);
@@ -797,12 +845,12 @@ export function parseBetPaste(rawText: string): ParseResult {
         
         if (wonMatch && !statusText.includes('winner')) {
           // Match "won" but not "winner" (which is part of bet type like "Winner (2 way)")
-          status = 'won';
+        status = 'won';
         } else if (lostMatch && !statusText.includes('loss')) {
           // Match "lost" but be careful with words containing it
-          status = 'lost';
+        status = 'lost';
         } else if (pendingMatch) {
-          status = 'pending';
+        status = 'pending';
         }
         // Default remains 'pending' if no status found
       }

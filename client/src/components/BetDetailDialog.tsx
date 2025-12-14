@@ -11,6 +11,7 @@ import { LiveProbabilityBadge } from "./LiveProbabilityBadge";
 import { GameStatusBadge } from "./GameStatusBadge";
 import { ParlayLegsBadge } from "./ParlayLegsBadge";
 import { ParlayLiveProgress, type ParlayLiveStats } from "./ParlayLiveProgress";
+import { LiveStatsBadge, type LiveStat } from "./LiveStatsBadge";
 import { RoundRobinSettlement } from "./RoundRobinSettlement";
 import { isRoundRobin } from "@/lib/roundRobin";
 import { Badge } from "@/components/ui/badge";

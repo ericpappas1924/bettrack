@@ -450,9 +450,9 @@ export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClic
                     {formatCurrency(bet.stake)}
                   </TableCell>
                   <TableCell>
-                    {liveStat ? (
+                    {liveStat && !isParlay(bet.betType) ? (
                       <div className="space-y-1">
-                        {liveStat.betType === 'Player Prop' && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined ? (
+                        {(liveStat.betType === 'Player Prop' || bet.betType === 'Player Prop') && liveStat.currentValue !== undefined && liveStat.targetValue !== undefined ? (
                           <>
                             <div className="flex items-center justify-between gap-2 text-xs">
                               <span className="text-muted-foreground">

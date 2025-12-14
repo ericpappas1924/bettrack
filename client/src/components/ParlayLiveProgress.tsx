@@ -141,24 +141,64 @@ export function ParlayLiveProgress({ parlayStats, compact = false }: ParlayLiveP
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2">
-        {hasLost ? (
-          <Badge variant="destructive" className="text-xs">
-            {wonLegs}/{totalLegs} Won
-          </Badge>
-        ) : allWon ? (
-          <Badge className="bg-green-600 text-white text-xs">
-            All {totalLegs} Won
-          </Badge>
-        ) : hasLive ? (
-          <Badge className="bg-amber-600 text-white text-xs">
-            <Activity className="h-2.5 w-2.5 mr-1 animate-pulse" />
-            {wonLegs}/{totalLegs}
-          </Badge>
-        ) : (
-          <Badge variant="secondary" className="text-xs">
-            {wonLegs}/{totalLegs}
-          </Badge>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          {hasLost ? (
+            <Badge variant="destructive" className="text-xs">
+              {wonLegs}/{totalLegs} Won
+            </Badge>
+          ) : allWon ? (
+            <Badge className="bg-green-600 text-white text-xs">
+              All {totalLegs} Won
+            </Badge>
+          ) : hasLive ? (
+            <Badge className="bg-amber-600 text-white text-xs">
+              <Activity className="h-2.5 w-2.5 mr-1 animate-pulse" />
+              {wonLegs}/{totalLegs}
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="text-xs">
+              {wonLegs}/{totalLegs}
+            </Badge>
+          )}
+        </div>
+        {/* Show live legs summary */}
+        {hasLive && liveLegs > 0 && (
+          <div className="text-xs text-muted-foreground">
+            {liveLegs} live leg{liveLegs > 1 ? 's' : ''}
+          </div>
+        )}
+        {/* Show player prop progress for live legs */}
+        {hasLive && legs.filter(l => l.isLive && l.betType === 'Player Prop' && l.currentValue !== undefined).length > 0 && (
+          <div className="space-y-1">
+            {legs.filter(l => l.isLive && l.betType === 'Player Prop' && l.currentValue !== undefined).slice(0, 2).map((leg, idx) => (
+              <div key={idx} className="text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-muted-foreground">
+                    {leg.team}: {leg.currentValue !== undefined && leg.targetValue !== undefined 
+                      ? `${Number.isInteger(leg.currentValue) ? leg.currentValue : leg.currentValue.toFixed(1)}/${Number.isInteger(leg.targetValue) ? leg.targetValue : leg.targetValue.toFixed(1)}`
+                      : ''}
+                  </span>
+                  {leg.progress !== undefined && (
+                    <span className={leg.isWinning ? 'text-green-600 font-medium' : 'text-amber-600'}>
+                      {Math.round(leg.progress)}%
+                    </span>
+                  )}
+                </div>
+                {leg.progress !== undefined && (
+                  <Progress 
+                    value={leg.progress} 
+                    className={`h-1 mt-0.5 [&>div]:${getProgressBarColor(leg.progress, leg.isOver, leg.isComplete, leg.isWinning)}`}
+                  />
+                )}
+              </div>
+            ))}
+            {legs.filter(l => l.isLive && l.betType === 'Player Prop' && l.currentValue !== undefined).length > 2 && (
+              <div className="text-xs text-muted-foreground italic">
+                +{legs.filter(l => l.isLive && l.betType === 'Player Prop' && l.currentValue !== undefined).length - 2} more live
+              </div>
+            )}
+          </div>
         )}
       </div>
     );

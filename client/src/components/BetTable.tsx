@@ -494,7 +494,50 @@ export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClic
                         )}
                       </div>
                     ) : parlayStats && parlayStats.legs.length > 0 ? (
-                      <ParlayLiveProgressCompact parlayStats={parlayStats} />
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="cursor-help">
+                              <ParlayLiveProgressCompact parlayStats={parlayStats} />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-md">
+                            <div className="space-y-2">
+                              <div className="font-semibold text-sm mb-2">
+                                Parlay Legs ({parlayStats.legs.filter(l => l.status === 'won').length}/{parlayStats.legs.length} won)
+                              </div>
+                              {parlayStats.legs.map((leg, idx) => (
+                                <div key={idx} className="text-xs space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium">{leg.team}</span>
+                                    <Badge 
+                                      variant={leg.status === 'won' ? 'default' : leg.status === 'lost' ? 'destructive' : 'secondary'}
+                                      className={`text-xs ${
+                                        leg.status === 'won' ? 'bg-green-600' : 
+                                        leg.status === 'lost' ? '' : 
+                                        leg.isLive ? 'bg-amber-600 text-white' : ''
+                                      }`}
+                                    >
+                                      {leg.status === 'won' ? 'Won' : 
+                                       leg.status === 'lost' ? 'Lost' : 
+                                       leg.isLive ? 'Live' : 'Pending'}
+                                    </Badge>
+                                  </div>
+                                  {leg.betType === 'Player Prop' && leg.currentValue !== undefined && leg.targetValue !== undefined && (
+                                    <div className="text-muted-foreground">
+                                      {leg.currentValue} / {leg.targetValue} {leg.statType}
+                                      {leg.progress !== undefined && ` (${Math.round(leg.progress)}%)`}
+                                    </div>
+                                  )}
+                                  {leg.gameStatus && (
+                                    <div className="text-muted-foreground">{leg.gameStatus}</div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     ) : (
                       <span className="text-xs text-muted-foreground">-</span>
                     )}

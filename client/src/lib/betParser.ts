@@ -450,19 +450,19 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
           continue;
         }
         
-        // Pattern 4: Player Props: Player Name (Team) Number+ Stat Type
+        // Pattern 4a: Player Props: Player Name (Team) Number+ Stat Type
         // Examples:
         // - "Patrick Mahomes (KC) 219+ Passing Yards"
         // - "Josh Allen (BUF) 206+ Passing Yards"
         // - "Lamar Jackson (BAL) 1+ Passing Tds"
         // - "Zay Flowers (BAL) 5+ Receptions"
         // - "Kyle Monangai (CHI) 13+ Carries"
-        const playerPropMatch = betLine.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(\d+)\+\s+(.+)$/i);
-        if (playerPropMatch) {
-          const playerName = playerPropMatch[1].trim();
-          const teamAbbr = playerPropMatch[2].toUpperCase();
-          const targetValue = playerPropMatch[3];
-          const statType = playerPropMatch[4].trim();
+        const playerPropPlusMatch = betLine.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(\d+(?:\.\d+)?)\+\s+(.+)$/i);
+        if (playerPropPlusMatch) {
+          const playerName = playerPropPlusMatch[1].trim();
+          const teamAbbr = playerPropPlusMatch[2].toUpperCase();
+          const targetValue = playerPropPlusMatch[3];
+          const statType = playerPropPlusMatch[4].trim();
           
           // Convert stat type to standard format
           let normalizedStat = statType;
@@ -474,12 +474,48 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
             normalizedStat = 'Receptions';
           } else if (statType.match(/Carries?/i)) {
             normalizedStat = 'Carries';
+          } else if (statType.match(/Receiving\s+Yards?/i)) {
+            normalizedStat = 'Receiving Yards';
           }
           
           // Format as "Over" bet (the + means over)
           const legText = `[${detectedSport}] ${gameMatchup} - ${playerName} (${teamAbbr}) Over ${targetValue} ${normalizedStat} [Pending]`;
           legs.push(legText);
-          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg (player prop): ${legText}`);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg (player prop +): ${legText}`);
+          i += 3; // Skip header, game, and bet line
+          continue;
+        }
+        
+        // Pattern 4b: Player Props: Player Name (Team) Over/Under Number Stat Type
+        // Examples:
+        // - "Lamar Jackson (BAL) Over 228.5 Passing Yards"
+        // - "Mark Andrews (BAL) Under 50.5 Receiving Yards"
+        const playerPropOverUnderMatch = betLine.match(/^([A-Za-z\s.']+)\s*\(([A-Z]+)\)\s+(Over|Under)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
+        if (playerPropOverUnderMatch) {
+          const playerName = playerPropOverUnderMatch[1].trim();
+          const teamAbbr = playerPropOverUnderMatch[2].toUpperCase();
+          const overUnder = playerPropOverUnderMatch[3];
+          const targetValue = playerPropOverUnderMatch[4];
+          const statType = playerPropOverUnderMatch[5].trim();
+          
+          // Convert stat type to standard format
+          let normalizedStat = statType;
+          if (statType.match(/Passing\s+Yards?/i)) {
+            normalizedStat = 'Passing Yards';
+          } else if (statType.match(/Passing\s+Tds?/i)) {
+            normalizedStat = 'Passing TDs';
+          } else if (statType.match(/Receptions?/i)) {
+            normalizedStat = 'Receptions';
+          } else if (statType.match(/Carries?/i)) {
+            normalizedStat = 'Carries';
+          } else if (statType.match(/Receiving\s+Yards?/i)) {
+            normalizedStat = 'Receiving Yards';
+          }
+          
+          // Format as Over/Under bet
+          const legText = `[${detectedSport}] ${gameMatchup} - ${playerName} (${teamAbbr}) ${overUnder} ${targetValue} ${normalizedStat} [Pending]`;
+          legs.push(legText);
+          console.log(`   ✅ [PARSER] Extracted RBL/DST parlay leg (player prop Over/Under): ${legText}`);
           i += 3; // Skip header, game, and bet line
           continue;
         }

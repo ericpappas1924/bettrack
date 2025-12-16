@@ -45,8 +45,10 @@ export default function Dashboard() {
   const [importOpen, setImportOpen] = useState(false);
   const [detailBet, setDetailBet] = useState<Bet | null>(null);
   const [sport, setSport] = useState("all");
+  const [betType, setBetType] = useState("all");
   const [status, setStatus] = useState("all");
   const [gameStatus, setGameStatus] = useState("all");
+  const [propMarket, setPropMarket] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [fetchingCLV, setFetchingCLV] = useState<Set<string>>(new Set());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -298,6 +300,7 @@ export default function Dashboard() {
 
   const filteredBets = bets.filter((bet) => {
     const matchesSport = sport === "all" || bet.sport === sport;
+    const matchesBetType = betType === "all" || bet.betType === betType;
     const matchesStatus = status === "all" || bet.status === status;
     const matchesSearch =
       searchQuery === "" ||
@@ -305,6 +308,10 @@ export default function Dashboard() {
       bet.betType.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (bet.game && bet.game.toLowerCase().includes(searchQuery.toLowerCase()));
     
+    const matchesPropMarket =
+      propMarket === "all" ||
+      (bet.market && bet.market === propMarket);
+
     // Game status filtering
     let matchesGameStatus = true;
     if (gameStatus !== "all" && bet.gameStartTime && bet.sport) {
@@ -321,7 +328,7 @@ export default function Dashboard() {
       matchesDate = isSameDay(startOfDay(betDate), startOfDay(selectedDate));
     }
     
-    return matchesSport && matchesStatus && matchesGameStatus && matchesSearch && matchesDate;
+    return matchesSport && matchesBetType && matchesStatus && matchesGameStatus && matchesPropMarket && matchesSearch && matchesDate;
   });
 
   const activeBets = bets.filter((bet) => bet.status === "active");
@@ -434,8 +441,10 @@ export default function Dashboard() {
 
   const handleClearFilters = () => {
     setSport("all");
+    setBetType("all");
     setStatus("all");
     setGameStatus("all");
+    setPropMarket("all");
     setSearchQuery("");
   };
 
@@ -443,7 +452,13 @@ export default function Dashboard() {
     setSelectedDate(null);
   };
 
-  const hasActiveFilters = sport !== "all" || status !== "all" || gameStatus !== "all" || searchQuery !== "";
+  const hasActiveFilters =
+    sport !== "all" ||
+    betType !== "all" ||
+    status !== "all" ||
+    gameStatus !== "all" ||
+    propMarket !== "all" ||
+    searchQuery !== "";
   const isViewingAllBets = !selectedDate && !hasActiveFilters;
 
   const handleUpdateLiveOdds = (betId: string, liveOdds: string) => {
@@ -699,12 +714,21 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   <BetFilters
                     sport={sport}
+                    betType={betType}
                     status={status}
                     gameStatus={gameStatus}
+                    propMarket={propMarket}
                     searchQuery={searchQuery}
                     onSportChange={setSport}
+                    onBetTypeChange={(value) => {
+                      setBetType(value);
+                      if (value !== "Player Prop" && value !== "Player Prop Parlay") {
+                        setPropMarket("all");
+                      }
+                    }}
                     onStatusChange={setStatus}
                     onGameStatusChange={setGameStatus}
+                    onPropMarketChange={setPropMarket}
                     onSearchChange={setSearchQuery}
                     onClear={handleClearFilters}
                   />

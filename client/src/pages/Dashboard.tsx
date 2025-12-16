@@ -508,6 +508,12 @@ export default function Dashboard() {
             <h1 className="text-lg sm:text-xl font-bold">BetTrack</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/analytics">
+              <Button variant="outline" size="sm" data-testid="button-analytics">
+                <BarChart3 className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Analytics</span>
+              </Button>
+            </Link>
             <Link href="/social">
               <Button variant="outline" size="sm" data-testid="button-social">
                 <Users className="h-4 w-4 md:mr-2" />

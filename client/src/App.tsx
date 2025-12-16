@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import Dashboard from "@/pages/Dashboard";
 import SocialDashboard from "@/pages/SocialDashboard";
+import PerformanceAnalytics from "@/pages/PerformanceAnalytics";
 import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import { Loader2 } from "lucide-react";
@@ -35,6 +36,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/social" component={SocialDashboard} />
+      <Route path="/analytics" component={PerformanceAnalytics} />
       <Route component={NotFound} />
     </Switch>
   );

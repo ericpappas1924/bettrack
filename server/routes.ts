@@ -1638,5 +1638,436 @@ export async function registerRoutes(
     }
   });
 
+  // Performance Analytics API - Get performance data filtered by sport, bet types, and date range
+  app.get("/api/analytics/performance", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sport, betTypes, startDate, endDate } = req.query;
+      
+      console.log(`📊 [ANALYTICS] Request from user ${userId.substring(0, 8)}`);
+      console.log(`   Filters: sport=${sport}, betTypes=${betTypes}, startDate=${startDate}, endDate=${endDate}`);
+      
+      const allBets = await storage.getAllBets(userId);
+      
+      // Filter bets based on query parameters
+      let filteredBets = allBets.filter((bet: any) => bet.status === 'settled');
+      
+      // Filter by sport
+      if (sport && sport !== 'all') {
+        filteredBets = filteredBets.filter((bet: any) => bet.sport === sport);
+      }
+      
+      // Filter by bet types (can be comma-separated)
+      if (betTypes && betTypes !== 'all') {
+        const betTypeArray = betTypes.split(',');
+        filteredBets = filteredBets.filter((bet: any) => 
+          betTypeArray.includes(bet.betType)
+        );
+      }
+      
+      // Filter by date range
+      if (startDate) {
+        const start = new Date(startDate);
+        filteredBets = filteredBets.filter((bet: any) => {
+          const betDate = bet.settledAt ? new Date(bet.settledAt) : new Date(bet.createdAt);
+          return betDate >= start;
+        });
+      }
+      
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // End of day
+        filteredBets = filteredBets.filter((bet: any) => {
+          const betDate = bet.settledAt ? new Date(bet.settledAt) : new Date(bet.createdAt);
+          return betDate <= end;
+        });
+      }
+      
+      console.log(`📊 [ANALYTICS] Filtered to ${filteredBets.length} settled bets`);
+      
+      // Calculate metrics
+      const wins = filteredBets.filter((bet: any) => bet.result === 'won').length;
+      const losses = filteredBets.filter((bet: any) => bet.result === 'lost').length;
+      const pushes = filteredBets.filter((bet: any) => bet.result === 'push').length;
+      
+      const totalStaked = filteredBets.reduce(
+        (sum: number, bet: any) => sum + parseFloat(bet.stake || '0'),
+        0
+      );
+      
+      const totalProfit = filteredBets.reduce(
+        (sum: number, bet: any) => sum + parseFloat(bet.profit || '0'),
+        0
+      );
+      
+      const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+      const winRate = filteredBets.length > 0 ? (wins / filteredBets.length) * 100 : 0;
+      
+      // Calculate average odds
+      const avgOdds = filteredBets.length > 0
+        ? filteredBets.reduce((sum: number, bet: any) => {
+            const odds = parseInt(bet.openingOdds || '0');
+            return sum + odds;
+          }, 0) / filteredBets.length
+        : 0;
+      
+      // Group by time period for trend data
+      const betsByDate: { [key: string]: any[] } = {};
+      filteredBets.forEach((bet: any) => {
+        const betDate = bet.settledAt ? new Date(bet.settledAt) : new Date(bet.createdAt);
+        const dateKey = betDate.toISOString().split('T')[0];
+        if (!betsByDate[dateKey]) {
+          betsByDate[dateKey] = [];
+        }
+        betsByDate[dateKey].push(bet);
+      });
+      
+      // Calculate cumulative profit over time
+      const trendData = Object.keys(betsByDate)
+        .sort()
+        .map(date => {
+          const dayBets = betsByDate[date];
+          const dayProfit = dayBets.reduce(
+            (sum: number, bet: any) => sum + parseFloat(bet.profit || '0'),
+            0
+          );
+          return {
+            date,
+            profit: dayProfit,
+            wins: dayBets.filter((b: any) => b.result === 'won').length,
+            losses: dayBets.filter((b: any) => b.result === 'lost').length,
+            pushes: dayBets.filter((b: any) => b.result === 'push').length,
+          };
+        });
+      
+      // Calculate cumulative profit
+      let cumulative = 0;
+      trendData.forEach(day => {
+        cumulative += day.profit;
+        (day as any).cumulativeProfit = cumulative;
+      });
+      
+      // Breakdown by bet type
+      const betTypeBreakdown: { [key: string]: any } = {};
+      filteredBets.forEach((bet: any) => {
+        const type = bet.betType || 'Unknown';
+        if (!betTypeBreakdown[type]) {
+          betTypeBreakdown[type] = {
+            wins: 0,
+            losses: 0,
+            pushes: 0,
+            profit: 0,
+            staked: 0,
+          };
+        }
+        
+        if (bet.result === 'won') betTypeBreakdown[type].wins++;
+        else if (bet.result === 'lost') betTypeBreakdown[type].losses++;
+        else if (bet.result === 'push') betTypeBreakdown[type].pushes++;
+        
+        betTypeBreakdown[type].profit += parseFloat(bet.profit || '0');
+        betTypeBreakdown[type].staked += parseFloat(bet.stake || '0');
+      });
+      
+      // Calculate ROI for each bet type
+      Object.keys(betTypeBreakdown).forEach(type => {
+        const breakdown = betTypeBreakdown[type];
+        breakdown.roi = breakdown.staked > 0 ? (breakdown.profit / breakdown.staked) * 100 : 0;
+        breakdown.winRate = (breakdown.wins + breakdown.losses + breakdown.pushes) > 0
+          ? (breakdown.wins / (breakdown.wins + breakdown.losses + breakdown.pushes)) * 100
+          : 0;
+      });
+      
+      // ========== Feature #2: Odds Range Analysis ==========
+      const oddsRanges = [
+        { key: '-300+', min: -Infinity, max: -300, label: '-300 or better' },
+        { key: '-200_to_-299', min: -299, max: -200, label: '-200 to -299' },
+        { key: '-150_to_-199', min: -199, max: -150, label: '-150 to -199' },
+        { key: '-110_to_-149', min: -149, max: -110, label: '-110 to -149' },
+        { key: '+100_to_+199', min: 100, max: 199, label: '+100 to +199' },
+        { key: '+200_to_+299', min: 200, max: 299, label: '+200 to +299' },
+        { key: '+300+', min: 300, max: Infinity, label: '+300 or more' },
+      ];
+      
+      const oddsRangeAnalysis: any = {};
+      oddsRanges.forEach(range => {
+        const rangeBets = filteredBets.filter((bet: any) => {
+          const odds = parseInt(bet.openingOdds || '0');
+          if (range.key === '-300+') {
+            return odds <= range.max;
+          } else if (range.key === '+300+') {
+            return odds >= range.min;
+          } else if (odds < 0) {
+            return odds >= range.min && odds <= range.max;
+          } else {
+            return odds >= range.min && odds <= range.max;
+          }
+        });
+        
+        const rangeWins = rangeBets.filter((b: any) => b.result === 'won').length;
+        const rangeLosses = rangeBets.filter((b: any) => b.result === 'lost').length;
+        const rangePushes = rangeBets.filter((b: any) => b.result === 'push').length;
+        const rangeStaked = rangeBets.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+        const rangeProfit = rangeBets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0);
+        const rangeRoi = rangeStaked > 0 ? (rangeProfit / rangeStaked) * 100 : 0;
+        
+        oddsRangeAnalysis[range.key] = {
+          label: range.label,
+          wins: rangeWins,
+          losses: rangeLosses,
+          pushes: rangePushes,
+          roi: parseFloat(rangeRoi.toFixed(2)),
+          profit: parseFloat(rangeProfit.toFixed(2)),
+          staked: parseFloat(rangeStaked.toFixed(2)),
+          count: rangeBets.length,
+        };
+      });
+      
+      // ========== Feature #3: Recent Form Widget ==========
+      const sortedBets = [...filteredBets].sort((a: any, b: any) => {
+        const dateA = a.settledAt ? new Date(a.settledAt) : new Date(a.createdAt);
+        const dateB = b.settledAt ? new Date(b.settledAt) : new Date(b.createdAt);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      const last20Bets = sortedBets.slice(0, 20);
+      const last20Wins = last20Bets.filter((b: any) => b.result === 'won').length;
+      const last20WinRate = last20Bets.length > 0 ? (last20Wins / last20Bets.length) * 100 : 0;
+      const last20Profit = last20Bets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0);
+      const last20Staked = last20Bets.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+      const last20Roi = last20Staked > 0 ? (last20Profit / last20Staked) * 100 : 0;
+      
+      // Calculate trend (compare first 10 vs last 10)
+      let trend = 'stable';
+      if (last20Bets.length >= 20) {
+        const first10 = last20Bets.slice(0, 10);
+        const second10 = last20Bets.slice(10, 20);
+        const first10Roi = first10.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0) / 
+                           first10.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+        const second10Roi = second10.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0) / 
+                            second10.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+        
+        if (first10Roi > second10Roi + 0.05) trend = 'improving';
+        else if (first10Roi < second10Roi - 0.05) trend = 'declining';
+      }
+      
+      const recentForm = {
+        bets: last20Bets.map((bet: any) => ({
+          date: bet.settledAt ? new Date(bet.settledAt).toISOString() : new Date(bet.createdAt).toISOString(),
+          result: bet.result,
+          profit: parseFloat(bet.profit || '0'),
+          betType: bet.betType,
+          team: bet.team,
+          stake: parseFloat(bet.stake || '0'),
+        })),
+        last20WinRate: parseFloat(last20WinRate.toFixed(2)),
+        last20Roi: parseFloat(last20Roi.toFixed(2)),
+        last20Profit: parseFloat(last20Profit.toFixed(2)),
+        trend,
+      };
+      
+      // ========== Feature #7: Bet Size Analysis ==========
+      const stakes = filteredBets.map((b: any) => parseFloat(b.stake || '0')).sort((a, b) => a - b);
+      let betSizeAnalysis: any = { ranges: [], quartiles: [] };
+      
+      if (stakes.length >= 4) {
+        const q1Index = Math.floor(stakes.length * 0.25);
+        const q2Index = Math.floor(stakes.length * 0.5);
+        const q3Index = Math.floor(stakes.length * 0.75);
+        
+        const q1 = stakes[q1Index];
+        const q2 = stakes[q2Index];
+        const q3 = stakes[q3Index];
+        
+        betSizeAnalysis.quartiles = [
+          parseFloat(q1.toFixed(2)),
+          parseFloat(q2.toFixed(2)),
+          parseFloat(q3.toFixed(2)),
+        ];
+        
+        const sizeRanges = [
+          { label: `Small ($0-$${q1.toFixed(0)})`, min: 0, max: q1 },
+          { label: `Medium ($${q1.toFixed(0)}-$${q2.toFixed(0)})`, min: q1, max: q2 },
+          { label: `Large ($${q2.toFixed(0)}-$${q3.toFixed(0)})`, min: q2, max: q3 },
+          { label: `Extra Large ($${q3.toFixed(0)}+)`, min: q3, max: Infinity },
+        ];
+        
+        betSizeAnalysis.ranges = sizeRanges.map(range => {
+          const rangeBets = filteredBets.filter((bet: any) => {
+            const stake = parseFloat(bet.stake || '0');
+            return stake > range.min && stake <= range.max;
+          });
+          
+          const rangeWins = rangeBets.filter((b: any) => b.result === 'won').length;
+          const rangeLosses = rangeBets.filter((b: any) => b.result === 'lost').length;
+          const rangePushes = rangeBets.filter((b: any) => b.result === 'push').length;
+          const rangeStaked = rangeBets.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+          const rangeProfit = rangeBets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0);
+          const rangeRoi = rangeStaked > 0 ? (rangeProfit / rangeStaked) * 100 : 0;
+          const avgStake = rangeBets.length > 0 ? rangeStaked / rangeBets.length : 0;
+          
+          return {
+            label: range.label,
+            wins: rangeWins,
+            losses: rangeLosses,
+            pushes: rangePushes,
+            roi: parseFloat(rangeRoi.toFixed(2)),
+            profit: parseFloat(rangeProfit.toFixed(2)),
+            staked: parseFloat(rangeStaked.toFixed(2)),
+            count: rangeBets.length,
+            avgStake: parseFloat(avgStake.toFixed(2)),
+          };
+        });
+      }
+      
+      // ========== Feature #8: Sport Comparison Chart ==========
+      const sportGroups: { [key: string]: any[] } = {};
+      filteredBets.forEach((bet: any) => {
+        const sport = bet.sport || 'Unknown';
+        if (!sportGroups[sport]) {
+          sportGroups[sport] = [];
+        }
+        sportGroups[sport].push(bet);
+      });
+      
+      const sportComparison = {
+        sports: Object.keys(sportGroups).map(sport => {
+          const sportBets = sportGroups[sport];
+          const sportWins = sportBets.filter((b: any) => b.result === 'won').length;
+          const sportLosses = sportBets.filter((b: any) => b.result === 'lost').length;
+          const sportPushes = sportBets.filter((b: any) => b.result === 'push').length;
+          const sportStaked = sportBets.reduce((sum: number, b: any) => sum + parseFloat(b.stake || '0'), 0);
+          const sportProfit = sportBets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0);
+          const sportRoi = sportStaked > 0 ? (sportProfit / sportStaked) * 100 : 0;
+          
+          return {
+            sport,
+            wins: sportWins,
+            losses: sportLosses,
+            pushes: sportPushes,
+            roi: parseFloat(sportRoi.toFixed(2)),
+            profit: parseFloat(sportProfit.toFixed(2)),
+            staked: parseFloat(sportStaked.toFixed(2)),
+            count: sportBets.length,
+          };
+        }).sort((a, b) => b.roi - a.roi), // Sort by ROI descending
+      };
+      
+      // ========== Feature #10: Advanced Metrics ==========
+      const unitSize = totalStaked > 0 ? totalStaked / filteredBets.length : 100; // Use avg stake as unit
+      const totalUnits = totalStaked / unitSize;
+      const unitsWon = totalProfit / unitSize;
+      
+      const wonBets = filteredBets.filter((b: any) => b.result === 'won');
+      const lostBets = filteredBets.filter((b: any) => b.result === 'lost');
+      
+      const totalWinAmount = wonBets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0);
+      const totalLossAmount = Math.abs(lostBets.reduce((sum: number, b: any) => sum + parseFloat(b.profit || '0'), 0));
+      
+      const avgWinSize = wonBets.length > 0 ? totalWinAmount / wonBets.length : 0;
+      const avgLossSize = lostBets.length > 0 ? totalLossAmount / lostBets.length : 0;
+      const winLossRatio = avgLossSize > 0 ? avgWinSize / avgLossSize : 0;
+      
+      // Calculate breakeven win rate based on average odds
+      const breakevenWinRate = avgOdds < 0 
+        ? (Math.abs(avgOdds) / (Math.abs(avgOdds) + 100)) * 100
+        : (100 / (avgOdds + 100)) * 100;
+      
+      // CLV stats
+      const betsWithClv = filteredBets.filter((b: any) => b.clv && b.clv !== '0');
+      const avgClv = betsWithClv.length > 0
+        ? betsWithClv.reduce((sum: number, b: any) => sum + parseFloat(b.clv || '0'), 0) / betsWithClv.length
+        : null;
+      
+      const advancedMetrics = {
+        totalUnits: parseFloat(totalUnits.toFixed(2)),
+        unitsWon: parseFloat(unitsWon.toFixed(2)),
+        unitSize: parseFloat(unitSize.toFixed(2)),
+        avgWinSize: parseFloat(avgWinSize.toFixed(2)),
+        avgLossSize: parseFloat(avgLossSize.toFixed(2)),
+        winLossRatio: parseFloat(winLossRatio.toFixed(2)),
+        breakevenWinRate: parseFloat(breakevenWinRate.toFixed(2)),
+        actualWinRate: parseFloat(winRate.toFixed(2)),
+        avgClv: avgClv ? parseFloat(avgClv.toFixed(2)) : null,
+      };
+      
+      // ========== Feature #12: Predictive Insights ==========
+      const daySpan = trendData.length > 0 ? trendData.length : 1;
+      const avgDailyBets = filteredBets.length / daySpan;
+      const avgDailyProfit = totalProfit / daySpan;
+      
+      // Calculate variance for confidence intervals
+      const dailyProfits = trendData.map(d => d.profit);
+      const avgDailyProfitCalc = dailyProfits.reduce((sum, p) => sum + p, 0) / dailyProfits.length;
+      const variance = dailyProfits.reduce((sum, p) => sum + Math.pow(p - avgDailyProfitCalc, 2), 0) / dailyProfits.length;
+      const stdDev = Math.sqrt(variance);
+      
+      const calculateProjection = (days: number) => {
+        const expectedBets = Math.round(avgDailyBets * days);
+        const expectedProfit = avgDailyProfit * days;
+        const margin = stdDev * Math.sqrt(days) * 1.96; // 95% confidence interval
+        
+        return {
+          bets: expectedBets,
+          expectedProfit: parseFloat(expectedProfit.toFixed(2)),
+          lowEstimate: parseFloat((expectedProfit - margin).toFixed(2)),
+          highEstimate: parseFloat((expectedProfit + margin).toFixed(2)),
+        };
+      };
+      
+      const warnings: string[] = [];
+      if (winRate < breakevenWinRate) {
+        warnings.push('Win rate below breakeven for average odds');
+      }
+      if (filteredBets.length < 30) {
+        warnings.push('Small sample size - projections may be unreliable');
+      }
+      if (roi < 0) {
+        warnings.push('Currently operating at a loss');
+      }
+      
+      const confidence = filteredBets.length >= 100 ? 'high' : filteredBets.length >= 30 ? 'medium' : 'low';
+      
+      const predictiveInsights = {
+        projections: {
+          weekly: calculateProjection(7),
+          monthly: calculateProjection(30),
+          quarterly: calculateProjection(90),
+          yearly: calculateProjection(365),
+        },
+        warnings,
+        confidence,
+      };
+      
+      const response = {
+        summary: {
+          totalBets: filteredBets.length,
+          wins,
+          losses,
+          pushes,
+          winRate: parseFloat(winRate.toFixed(2)),
+          roi: parseFloat(roi.toFixed(2)),
+          totalStaked: parseFloat(totalStaked.toFixed(2)),
+          totalProfit: parseFloat(totalProfit.toFixed(2)),
+          avgOdds: parseFloat(avgOdds.toFixed(0)),
+        },
+        trendData,
+        betTypeBreakdown,
+        oddsRangeAnalysis,
+        recentForm,
+        betSizeAnalysis,
+        sportComparison,
+        advancedMetrics,
+        predictiveInsights,
+      };
+      
+      console.log(`✅ [ANALYTICS] Sending response with ${trendData.length} data points`);
+      res.json(response);
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   return httpServer;
 }

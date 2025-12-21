@@ -14,30 +14,6 @@ run = ["npm", "run", "start"]
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 34103
-externalPort = 3000
-
-[[ports]]
-localPort = 36249
-externalPort = 5000
-
-[[ports]]
-localPort = 38933
-externalPort = 4200
-
-[[ports]]
-localPort = 39019
-externalPort = 3003
-
-[[ports]]
-localPort = 39313
-externalPort = 3001
-
-[[ports]]
-localPort = 41201
-externalPort = 3002
-
 [env]
 PORT = "5000"
 
@@ -64,3 +40,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_log_in_with_replit:1.0.0", "github:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+ODDS_API_KEY = "3367297273ccad1682c56238f0a5ef3d"

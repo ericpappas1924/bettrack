@@ -358,11 +358,11 @@ export function BetDetailDialog({ bet, open, onOpenChange, onUpdateLiveOdds, onS
         <DialogHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-2 sm:pb-4 shrink-0">
           <div className="flex items-start justify-between gap-2 sm:gap-4 pr-8">
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-lg sm:text-2xl truncate">
+              <DialogTitle className="text-lg sm:text-2xl break-words pr-2">
                 {isMatchupOnly ? bet.game || bet.team : bettingSelection}
               </DialogTitle>
               {isMatchupOnly && (
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1 break-words">
                   Betting on: {bettingSelection}
                 </p>
               )}

@@ -212,7 +212,7 @@ export function BetTable({ bets, liveStats = [], parlayLiveStats = [], onRowClic
                         <ParlayLiveProgressCompact parlayStats={parlayStats} />
                       )}
                     </div>
-                    <p className="font-medium truncate">{bet.team}</p>
+                    <p className="font-medium break-words">{bet.team}</p>
                     <p className="text-xs text-muted-foreground">{bet.betType}</p>
                     {liveStat && liveStat.betType === 'Player Prop' && liveStat.progress !== undefined && (
                       <div className="w-full bg-secondary rounded-full h-1.5 mt-1">

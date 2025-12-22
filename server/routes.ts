@@ -193,9 +193,16 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       const validatedData = insertBetSchema.parse({ ...req.body, userId });
       
-      // Check for duplicates (same odds and stake)
+      // Check for duplicates
       const existingBets = await storage.getAllBets(userId);
       const isDuplicate = existingBets.some((existingBet: any) => {
+        // PRIMARY CHECK: If both have externalId and they match, it's a duplicate
+        // If both have externalId and they differ, it's NOT a duplicate (even if everything else matches)
+        if (validatedData.externalId && existingBet.externalId) {
+          return existingBet.externalId === validatedData.externalId;
+        }
+        
+        // FALLBACK CHECK: If no externalId available, use field matching
         // Match on openingOdds and stake (as requested)
         const sameOdds = existingBet.openingOdds === validatedData.openingOdds;
         const sameStake = existingBet.stake === validatedData.stake;
@@ -466,7 +473,7 @@ export async function registerRoutes(
         });
       }
       
-      // STEP 3: Check for duplicates (same odds and stake)
+      // STEP 3: Check for duplicates
       console.log(`\n🔍 Checking for duplicates...`);
       const existingBets = await storage.getAllBets(userId);
       const duplicateBets: any[] = [];
@@ -474,6 +481,13 @@ export async function registerRoutes(
       
       for (const bet of validBets) {
         const isDuplicate = existingBets.some((existingBet: any) => {
+          // PRIMARY CHECK: If both have externalId and they match, it's a duplicate
+          // If both have externalId and they differ, it's NOT a duplicate (even if everything else matches)
+          if (bet.externalId && existingBet.externalId) {
+            return existingBet.externalId === bet.externalId;
+          }
+          
+          // FALLBACK CHECK: If no externalId available, use field matching
           // Match on openingOdds and stake (as requested)
           const sameOdds = existingBet.openingOdds === bet.openingOdds;
           const sameStake = existingBet.stake === bet.stake;
@@ -499,7 +513,10 @@ export async function registerRoutes(
         
         if (isDuplicate) {
           duplicateBets.push(bet);
-          console.log(`   ⚠️  Duplicate found: ${bet.team} ${bet.openingOdds} $${bet.stake}`);
+          const duplicateReason = bet.externalId 
+            ? `externalId: ${bet.externalId}`
+            : `fields: ${bet.team} ${bet.openingOdds} $${bet.stake}`;
+          console.log(`   ⚠️  Duplicate found (${duplicateReason})`);
         } else {
           uniqueBets.push(bet);
         }

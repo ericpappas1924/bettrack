@@ -396,6 +396,40 @@ function extractParlayDetails(block: string): { legs: string[]; description: str
       continue;
     }
     
+    // Try LIVE RBL Parlay format: [RBL] - GAME_ID - X-TEAM PARLAY
+    // Then: ID - TEAM vs TEAM / Game / Winner (2 way) / TEAM ODDS
+    // Example: 297474295 - Arkansas State vs Missouri State / Game / Winner (2 way) / Arkansas State -448
+    const liveRblParlayMatch = line.match(/\[RBL\]\s*-\s*G?\d+\s*-\s*\d+-TEAM\s+PARLAY/i);
+    if (liveRblParlayMatch && i + 1 < lines.length) {
+      const nextLine = lines[i + 1];
+      // Pattern: ID - TEAM1 vs TEAM2 / Game / Winner (2 way) / SELECTED_TEAM ODDS
+      const legMatch = nextLine.match(/^(\d+)\s*-\s*(.+?)\s+vs\s+(.+?)\s*\/\s*Game\s*\/\s*Winner\s*\([^)]+\)\s*\/\s*([^-+]+)\s*([+-]\d+)/i);
+      if (legMatch) {
+        const betId = legMatch[1];
+        const team1 = legMatch[2].trim();
+        const team2 = legMatch[3].trim();
+        const selectedTeam = legMatch[4].trim();
+        const odds = legMatch[5];
+        
+        const matchup = `${team1} vs ${team2}`;
+        
+        // Detect sport from next line if available (e.g., "Football / College Football")
+        let detectedSport = 'Other';
+        if (i + 2 < lines.length) {
+          const sportLine = lines[i + 2];
+          detectedSport = getSportFromText(sportLine);
+        }
+        
+        const legText = `[${detectedSport}] ${matchup} - ${selectedTeam} ${odds} [Pending]`;
+        legs.push(legText);
+        console.log(`   ✅ [PARSER] Extracted live RBL parlay leg: ${legText}`);
+        
+        // Skip the header, bet line, and sport line (if exists)
+        i += (i + 2 < lines.length && lines[i + 2].includes('/')) ? 3 : 2;
+        continue;
+      }
+    }
+    
     // Try RBL/DST Parlay format: [RBL] - DST Parlay|ID:...
     // Then: Game matchup on next line
     // Then: To Win: TEAM (TEAM1 @ TEAM2) OR Total Goals: Over/Under (X.X) (TEAM1 @ TEAM2) OR Double Chance: ...
@@ -689,18 +723,41 @@ export function parseBetPaste(rawText: string): ParseResult {
       let overUnder: 'Over' | 'Under' | undefined;
       let line: string | undefined;
       
-      // Handle live betting bets (especially esports)
-      if (isLive) {
-        const liveDetails = extractLiveBetDetails(block);
-        game = liveDetails.game;
-        description = liveDetails.description;
-        sport = liveDetails.sport;
-        gameId = liveDetails.gameId;
-        league = liveDetails.league;
+      // Handle parlays and teasers FIRST (before checking isLive)
+      // This ensures live parlays are properly parsed with legs
+      if (betType === 'Parlay' || betType === 'Teaser') {
+        const parlayDetails = extractParlayDetails(block);
+        legs = parlayDetails.legs;
+        description = betType === 'Teaser' 
+          ? `${legs?.length || 0}-Leg Teaser`
+          : parlayDetails.description;
+        // For game field, use short description instead of all legs
+        game = description;
+        gameStartTime = parlayDetails.gameStartTime;
+        if (gameStartTime) {
+          console.log(`  ✓ Extracted game time from ${betType.toLowerCase()}: ${gameStartTime}`);
+        }
         
-        // Use extracted odds if available, otherwise calculate from stake/win
-        if (liveDetails.odds !== null) {
-          calculatedOdds = liveDetails.odds;
+        // For RBL/DST parlays, try to detect sport from legs
+        if (block.includes('[RBL]') || block.includes('DST Parlay')) {
+          // Check if any leg has a detected sport
+          const legSports = legs?.map(leg => {
+            const sportMatch = leg.match(/^\[([^\]]+)\]/);
+            return sportMatch ? sportMatch[1] : null;
+          }).filter(s => s && s !== 'Other');
+          
+          // If all legs are the same sport, use that
+          if (legSports && legSports.length > 0) {
+            const firstSport = legSports[0];
+            if (legSports.every(s => s === firstSport)) {
+              sport = firstSport as Sport;
+            }
+          }
+          
+          // If still Other and RBL/DST format, default to SOC (most RBL parlays are soccer)
+          if (sport === 'Other') {
+            sport = 'SOC';
+          }
         }
       } else if (betType === 'Player Prop Parlay') {
         // Check if this is an RBL/DST Parlay format (can be soccer, NFL, NBA, etc.)
@@ -801,39 +858,18 @@ export function parseBetPaste(rawText: string): ParseResult {
           sport = getSportFromText(block);
         }
         }
-      } else if (betType === 'Parlay' || betType === 'Teaser') {
-        const parlayDetails = extractParlayDetails(block);
-        legs = parlayDetails.legs;
-        description = betType === 'Teaser' 
-          ? `${legs?.length || 0}-Leg Teaser`
-          : parlayDetails.description;
-        // For game field, use short description instead of all legs
-        game = description;
-        gameStartTime = parlayDetails.gameStartTime;
-        if (gameStartTime) {
-          console.log(`  ✓ Extracted game time from ${betType.toLowerCase()}: ${gameStartTime}`);
-        }
+      } else if (isLive) {
+        // Handle live betting bets (especially esports)
+        const liveDetails = extractLiveBetDetails(block);
+        game = liveDetails.game;
+        description = liveDetails.description;
+        sport = liveDetails.sport;
+        gameId = liveDetails.gameId;
+        league = liveDetails.league;
         
-        // For RBL/DST parlays, try to detect sport from legs
-        if (block.includes('[RBL]') || block.includes('DST Parlay')) {
-          // Check if any leg has a detected sport
-          const legSports = legs?.map(leg => {
-            const sportMatch = leg.match(/^\[([^\]]+)\]/);
-            return sportMatch ? sportMatch[1] : null;
-          }).filter(s => s && s !== 'Other');
-          
-          // If all legs are the same sport, use that
-          if (legSports && legSports.length > 0) {
-            const firstSport = legSports[0];
-            if (legSports.every(s => s === firstSport)) {
-              sport = firstSport as Sport;
-            }
-          }
-          
-          // If still Other and RBL/DST format, default to SOC (most RBL parlays are soccer)
-          if (sport === 'Other') {
-            sport = 'SOC';
-          }
+        // Use extracted odds if available, otherwise calculate from stake/win
+        if (liveDetails.odds !== null) {
+          calculatedOdds = liveDetails.odds;
         }
       } else {
         const straightDetails = extractStraightBetDetails(block);
@@ -1153,6 +1189,7 @@ export function convertToAppBet(parsed: ParsedBet) {
   
   return {
     id: parsed.id,
+    externalId: parsed.id.match(/^\d{9}$/) ? parsed.id : null, // Only use as externalId if it's a 9-digit number
     sport: parsed.sport,
     betType: parsed.betType,
     team: teamField,
